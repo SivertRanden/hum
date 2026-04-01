@@ -19,6 +19,7 @@ export default defineConfig({
     baseURL: `http://localhost:${CLIENT_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
   projects: [
     {
@@ -36,6 +37,7 @@ export default defineConfig({
         DB_PATH: TEST_DB,
         PORT: String(SERVER_PORT),
         CLIENT_ORIGIN: `http://localhost:${CLIENT_PORT}`,
+        DISABLE_RATE_LIMIT: '1',
       },
     },
     {

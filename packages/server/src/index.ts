@@ -23,6 +23,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+  skip: () => !!process.env.DISABLE_RATE_LIMIT,
 });
 
 // General API: 200 requests per minute per IP
@@ -32,6 +33,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+  skip: () => !!process.env.DISABLE_RATE_LIMIT,
 });
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
