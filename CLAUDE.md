@@ -11,7 +11,12 @@ Steps for every code change:
 4. Open a PR on GitHub targeting `main` using `gh pr create`
 5. Ensure CI passes before merging
 
-This rule is enforced by a `pre-push` git hook. Direct pushes to `main` will be blocked.
+This rule is enforced by a `pre-push` git hook stored in `.githooks/pre-push`. The repo is configured to use this directory via `core.hooksPath = .githooks`. Direct pushes to `main` will be blocked.
+
+> **New clone setup:** The `core.hooksPath` setting is stored in `.git/config` (not committed). After a fresh clone, run:
+> ```sh
+> git config core.hooksPath .githooks
+> ```
 
 ## Commit Messages
 
