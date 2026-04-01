@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel } from './api.js';
-import { useSocket, HumMessage } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer } from './useSocket.js';
+import { useVoiceChat } from './useVoiceChat.js';
 import {
   Button,
   Input,
@@ -109,19 +110,94 @@ function MessageList({ messages, myUserId }: { messages: HumMessage[]; myUserId:
   );
 }
 
-// ── Voice room placeholder ────────────────────────────────────────────────────
-function VoiceRoomView({ roomId }: { roomId: string }) {
-  const name = voiceRoomName(roomId);
+// ── Voice room view ───────────────────────────────────────────────────────────
+interface VoiceRoomViewProps {
+  roomId: string;
+  isInRoom: boolean;
+  isMuted: boolean;
+  participants: VoicePeer[];
+  myUserId: number;
+  onJoin: () => void;
+  onLeave: () => void;
+  onToggleMute: () => void;
+  joinError: string | null;
+}
+
+function MicIcon({ muted }: { muted: boolean }) {
+  if (muted) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+      </svg>
+    );
+  }
   return (
-    <div className="voice-room-view">
-      <div className="voice-room-icon">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-        </svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+    </svg>
+  );
+}
+
+function VoiceRoomView({
+  roomId, isInRoom, isMuted, participants, myUserId,
+  onJoin, onLeave, onToggleMute, joinError,
+}: VoiceRoomViewProps) {
+  const name = voiceRoomName(roomId);
+
+  if (!isInRoom) {
+    return (
+      <div className="voice-room-view">
+        <div className="voice-room-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </div>
+        <div className="voice-room-name">{name}</div>
+        <div className="voice-room-hint">Join the room to start talking with others in real time.</div>
+        {joinError && <p className="error">{joinError}</p>}
+        <button className="voice-join-btn" onClick={onJoin}>Join Voice</button>
       </div>
-      <div className="voice-room-name">{name}</div>
-      <div className="voice-room-hint">Join the room to start talking with others in real time.</div>
-      <button className="voice-join-btn">Join Voice</button>
+    );
+  }
+
+  return (
+    <div className="voice-room-active">
+      <div className="voice-room-active-header">
+        <div className="voice-live-indicator">
+          <span className="voice-live-dot" />
+          Live — {name}
+        </div>
+        <div className="voice-controls">
+          <button
+            className={`voice-ctrl-btn${isMuted ? ' muted' : ''}`}
+            onClick={onToggleMute}
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            <MicIcon muted={isMuted} />
+            {isMuted ? 'Unmute' : 'Mute'}
+          </button>
+          <button className="voice-ctrl-btn leave" onClick={onLeave} title="Leave voice">
+            Leave
+          </button>
+        </div>
+      </div>
+
+      <div className="voice-participants">
+        {participants.length === 0 ? (
+          <p className="voice-room-hint">You're the only one here. Invite someone!</p>
+        ) : (
+          participants.map(p => (
+            <div key={p.userId} className={`voice-participant${p.userId === myUserId ? ' me' : ''}`}>
+              <div className="voice-participant-avatar">
+                {p.username.slice(0, 2).toUpperCase()}
+              </div>
+              <span className="voice-participant-name">
+                {p.username}{p.userId === myUserId ? ' (you)' : ''}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -140,6 +216,7 @@ export default function App() {
   const [input, setInput] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const handleAuth = useCallback((a: AuthState) => {
     localStorage.setItem('hum_auth', JSON.stringify(a));
@@ -214,11 +291,38 @@ export default function App() {
 
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
 
-  const { sendMessage } = useSocket(
+  const { sendMessage, send } = useSocket(
     auth
-      ? { token: auth.token, spaceId: activeSpaceId, channelId: socketChannelId, onMessage, onHistory, onError }
+      ? {
+          token: auth.token,
+          spaceId: activeSpaceId,
+          channelId: socketChannelId,
+          onMessage,
+          onHistory,
+          onError,
+          onVoiceEvent: (evt) => handleVoiceEvent(evt),
+        }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
+
+  const {
+    isInRoom,
+    isMuted,
+    participants,
+    join: joinVoice,
+    leave: leaveVoice,
+    toggleMute,
+    handleVoiceEvent,
+  } = useVoiceChat({ send, spaceId: activeSpaceId });
+
+  const handleJoinVoice = async () => {
+    setJoinError(null);
+    try {
+      await joinVoice(activeChannelId);
+    } catch {
+      setJoinError('Microphone access denied. Please allow mic access and try again.');
+    }
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,6 +370,8 @@ export default function App() {
         channels={channels}
         onCreateChannel={handleCreateChannel}
         onDeleteChannel={handleDeleteChannel}
+        voiceParticipants={participants}
+        activeVoiceRoomId={isInRoom ? activeChannelId : null}
       />
 
       {/* Column 3: main content */}
@@ -283,7 +389,17 @@ export default function App() {
             </header>
 
             {inVoice ? (
-              <VoiceRoomView roomId={activeChannelId} />
+              <VoiceRoomView
+                roomId={activeChannelId}
+                isInRoom={isInRoom}
+                isMuted={isMuted}
+                participants={participants}
+                myUserId={auth.userId}
+                onJoin={handleJoinVoice}
+                onLeave={leaveVoice}
+                onToggleMute={toggleMute}
+                joinError={joinError}
+              />
             ) : (
               <>
                 <MessageList messages={messages} myUserId={auth.userId} />
