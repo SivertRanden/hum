@@ -5,3 +5,6 @@ dist/
 *.db-wal
 .env
 .env.local
+# Playwright
+playwright-report/
+test-results/
