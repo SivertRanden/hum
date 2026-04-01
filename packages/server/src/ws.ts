@@ -206,7 +206,7 @@ export function createWsServer(server: import('http').Server) {
     // Track which voice rooms this socket has joined (for cleanup on disconnect)
     const activeVoiceRooms = new Set<string>(); // "<spaceId>:<channelId>"
 
-    socket.on('message', (raw) => {
+    socket.on('message', async (raw) => {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(raw.toString()) as ClientMessage;
@@ -235,7 +235,7 @@ export function createWsServer(server: import('http').Server) {
         const spaceId = Number(msg.spaceId);
         const channelId = msg.channelId ?? 'general';
 
-        const space = queries.getSpaceById.get(spaceId);
+        const space = await queries.getSpaceById(spaceId);
         if (!space) {
           socket.send(JSON.stringify({ type: 'error', error: 'space not found' } satisfies ServerMessage));
           return;
@@ -250,7 +250,7 @@ export function createWsServer(server: import('http').Server) {
 
         // Broadcast online presence to others in space when user first connects
         if (wasOffline) {
-          queries.updateLastSeen.run(socket.userId);
+          void queries.updateLastSeen(socket.userId);
           const now = Math.floor(Date.now() / 1000);
           broadcastToSpace(spaceId, {
             type: 'presence_update',
@@ -260,7 +260,7 @@ export function createWsServer(server: import('http').Server) {
           }, socket);
         }
 
-        const history = queries.getMessages.all(spaceId, channelId, 100).map((m) => ({
+        const history = (await queries.getMessages(spaceId, channelId, 100)).map((m) => ({
           id: m.id,
           spaceId: m.space_id,
           channelId: m.channel,
@@ -292,8 +292,7 @@ export function createWsServer(server: import('http').Server) {
           return;
         }
 
-        const result = queries.insertMessage.run(socket.spaceId, socket.userId, socket.channelId, content);
-        const messageId = Number(result.lastInsertRowid);
+        const { id: messageId } = await queries.insertMessage(socket.spaceId, socket.userId, socket.channelId, content);
         const now = Math.floor(Date.now() / 1000);
 
         const outbound: ServerMessage = {
@@ -437,7 +436,7 @@ export function createWsServer(server: import('http').Server) {
           userSockets.delete(socket);
           if (userSockets.size === 0) {
             connectedUsers.delete(socket.userId);
-            queries.updateLastSeen.run(socket.userId);
+            void queries.updateLastSeen(socket.userId);
             const now = Math.floor(Date.now() / 1000);
             if (socket.spaceId !== undefined) {
               broadcastToSpace(socket.spaceId, {
