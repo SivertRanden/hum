@@ -863,3 +863,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--text-dim, #666);
   opacity: 0.5;
 }
+
+.unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hum-accent, #7c3aed);
+  flex-shrink: 0;
+}

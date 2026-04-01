@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent } from './useSocket.js';
 import { useVoiceChat } from './useVoiceChat.js';
 import {
   Button,
@@ -309,6 +309,11 @@ export default function App() {
   const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
+  const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
+  const activeSpaceIdRef = useRef(activeSpaceId);
+  const activeChannelIdRef = useRef(activeChannelId);
+  activeSpaceIdRef.current = activeSpaceId;
+  activeChannelIdRef.current = activeChannelId;
 
   const handleAuth = useCallback((a: AuthState) => {
     localStorage.setItem('hum_auth', JSON.stringify(a));
@@ -341,6 +346,13 @@ export default function App() {
   useEffect(() => {
     if (!auth || !activeSpaceId) { setMembers([]); return; }
     api.listMembers(auth.token, activeSpaceId).then(setMembers).catch(console.error);
+  }, [auth, activeSpaceId]);
+
+  useEffect(() => {
+    if (!auth || !activeSpaceId) { setUnreadCounts(new Map()); return; }
+    api.getUnreadCounts(auth.token, activeSpaceId).then(counts => {
+      setUnreadCounts(new Map(Object.entries(counts).map(([k, v]) => [k, Number(v)])));
+    }).catch(console.error);
   }, [auth, activeSpaceId]);
 
   // Auto-join via invite token in URL on mount
@@ -395,19 +407,48 @@ export default function App() {
 
   const handleSelectChannel = (id: string) => {
     setActiveChannelId(id);
-    if (!isVoiceChannel(id)) setMessages([]);
+    if (!isVoiceChannel(id)) {
+      setMessages([]);
+      // Clear unread for this channel
+      setUnreadCounts(prev => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   const onMessage = useCallback((msg: HumMessage) => {
     setMessages(prev => [...prev, msg]);
+    if (auth && activeSpaceIdRef.current && msg.channelId === activeChannelIdRef.current) {
+      void api.markChannelRead(auth.token, msg.spaceId, msg.channelId, msg.id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onHistory = useCallback((msgs: HumMessage[]) => {
     setMessages(msgs);
+    if (msgs.length > 0 && auth && activeSpaceIdRef.current) {
+      const lastId = msgs[msgs.length - 1].id;
+      const ch = activeChannelIdRef.current;
+      const sid = activeSpaceIdRef.current;
+      void api.markChannelRead(auth.token, sid, ch, lastId);
+      setUnreadCounts(prev => { const next = new Map(prev); next.delete(ch); return next; });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onError = useCallback((err: string) => {
     console.error('[ws]', err);
+  }, []);
+
+  const onChannelNewMessage = useCallback((event: ChannelNewMessageEvent) => {
+    if (event.channelId === activeChannelIdRef.current) return;
+    setUnreadCounts(prev => {
+      const next = new Map(prev);
+      next.set(event.channelId, (next.get(event.channelId) ?? 0) + 1);
+      return next;
+    });
   }, []);
 
   const onMessageEdit = useCallback((msg: HumMessage) => {
@@ -474,6 +515,7 @@ export default function App() {
           onTyping,
           onPresenceUpdate,
           onMention,
+          onChannelNewMessage,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -580,6 +622,7 @@ export default function App() {
         activeVoiceRoomId={isInRoom ? activeChannelId : null}
         members={members}
         onCreateInvite={handleCreateInvite}
+        unreadCounts={unreadCounts}
       />
 
       {/* Column 3: main content */}

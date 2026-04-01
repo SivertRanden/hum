@@ -116,4 +116,15 @@ export const api = {
 
   joinByInvite: (token: string, inviteToken: string) =>
     post<{ space: Space }>(`/invite/${inviteToken}/join`, {}, token),
+
+  getUnreadCounts: (token: string, spaceId: number) =>
+    get<Record<string, number>>(`/spaces/${spaceId}/unread`, token),
+
+  markChannelRead: async (token: string, spaceId: number, channel: string, lastReadMessageId: number): Promise<void> => {
+    await fetch(`${BASE}/spaces/${spaceId}/channels/${encodeURIComponent(channel)}/read`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ lastReadMessageId }),
+    });
+  },
 };

@@ -165,6 +165,29 @@ router.get('/:id/members', requireAuth, async (req: AuthRequest, res: Response) 
   res.json(members.map(m => ({ ...m, is_online: onlineIds.has(m.user_id) })));
 });
 
+// ── Unread counts ─────────────────────────────────────────────────────────────
+
+router.get('/:id/unread', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const rows = await queries.getUnreadCounts(req.user!.userId, spaceId);
+  const result: Record<string, number> = {};
+  for (const row of rows) { result[row.channel] = Number(row.count); }
+  res.json(result);
+});
+
+router.post('/:id/channels/:channelName/read', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const channelName = req.params.channelName;
+  const { lastReadMessageId } = req.body as { lastReadMessageId?: number };
+  if (typeof lastReadMessageId !== 'number') { res.status(400).json({ error: 'lastReadMessageId required' }); return; }
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  await queries.markChannelRead(req.user!.userId, spaceId, channelName, lastReadMessageId);
+  res.status(204).end();
+});
+
 // ── Invites ───────────────────────────────────────────────────────────────────
 
 router.post('/:id/invites', requireAuth, async (req: AuthRequest, res: Response) => {
