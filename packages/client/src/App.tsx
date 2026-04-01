@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate } from './useSocket.js';
 import { useVoiceChat } from './useVoiceChat.js';
 import {
   Button,
@@ -393,6 +393,14 @@ export default function App() {
     setMessages(prev => prev.filter(m => m.id !== messageId));
   }, []);
 
+  const onPresenceUpdate = useCallback((update: PresenceUpdate) => {
+    setMembers(prev => prev.map(m =>
+      m.user_id === update.userId
+        ? { ...m, is_online: update.isOnline, last_seen_at: update.lastSeenAt }
+        : m
+    ));
+  }, []);
+
   const handleEditMessage = useCallback((id: number, content: string) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content, editedAt: Math.floor(Date.now() / 1000) } : m));
   }, []);
@@ -430,6 +438,7 @@ export default function App() {
           onMessageDelete,
           onVoiceEvent: (evt) => handleVoiceEvent(evt),
           onTyping,
+          onPresenceUpdate,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -470,6 +479,8 @@ export default function App() {
     e.preventDefault();
     if (!input.trim()) return;
     sendMessage(input.trim());
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    if (isTypingRef.current) { sendTypingStop(); isTypingRef.current = false; }
     setInput('');
   };
 
@@ -477,6 +488,17 @@ export default function App() {
     if (!auth || !activeSpaceId) throw new Error('no active space');
     const { token } = await api.createInvite(auth.token, activeSpaceId);
     return token;
+  };
+
+  const handleDeleteSpace = async (id: number) => {
+    if (!auth) return;
+    await api.deleteSpace(auth.token, id);
+    setSpaces(prev => prev.filter(s => s.id !== id));
+    if (activeSpaceId === id) {
+      setActiveSpaceId(null);
+      setChannels([]);
+      setMessages([]);
+    }
   };
 
   const handleCreateSpace = async (e: React.FormEvent) => {
@@ -506,6 +528,7 @@ export default function App() {
         activeId={activeSpaceId}
         onSelect={handleSelectServer}
         onAdd={() => setShowCreateSpace(true)}
+        onDelete={handleDeleteSpace}
       />
 
       {/* Column 2: channel sidebar */}

@@ -70,6 +70,8 @@ export interface SpaceMember {
   role: 'owner' | 'member';
   joined_at: number;
   username: string;
+  is_online?: boolean;
+  last_seen_at?: number | null;
 }
 
 export const api = {
@@ -83,6 +85,9 @@ export const api = {
 
   createSpace: (token: string, name: string, description?: string) =>
     post<Space>('/spaces', { name, description }, token),
+
+  deleteSpace: (token: string, spaceId: number) =>
+    del(`/spaces/${spaceId}`, token),
 
   listChannels: (token: string, spaceId: number) =>
     get<Channel[]>(`/spaces/${spaceId}/channels`, token),

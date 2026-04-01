@@ -216,6 +216,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: #fff;
 }
 
+.server-delete-btn {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  padding: 0;
+  opacity: 0;
+  transition: opacity var(--hum-transition-fast), color var(--hum-transition-fast), background var(--hum-transition-fast);
+  flex-shrink: 0;
+}
+.server-rail-item:hover .server-delete-btn { opacity: 1; }
+.server-delete-btn:hover { color: #fff; background: var(--hum-error); border-color: var(--hum-error); }
+
 /* ── Channel sidebar ─────────────────────────────────────────────────────── */
 .channel-sidebar {
   background: var(--surface);
@@ -801,3 +824,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .msg-edit-save:hover { border-color: var(--accent); color: var(--accent); }
 .msg-edit-cancel:hover { color: var(--text); }
+
+/* ── Member presence indicators ─────────────────────────────────────────── */
+
+.member-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.presence-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--surface1, var(--bg));
+}
+
+.presence-dot.online {
+  background: var(--hum-success, #22c55e);
+}
+
+.presence-dot.offline {
+  background: var(--text-dim, #666);
+  opacity: 0.5;
+}

@@ -5,6 +5,7 @@ interface ServerRailProps {
   activeId: number | null;
   onSelect: (id: number) => void;
   onAdd: () => void;
+  onDelete?: (id: number) => void;
 }
 
 function initials(name: string) {
@@ -13,7 +14,15 @@ function initials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
-export function ServerRail({ servers, activeId, onSelect, onAdd }: ServerRailProps) {
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+    </svg>
+  );
+}
+
+export function ServerRail({ servers, activeId, onSelect, onAdd, onDelete }: ServerRailProps) {
   return (
     <div className="server-rail">
       <div className="server-rail-list">
@@ -26,6 +35,15 @@ export function ServerRail({ servers, activeId, onSelect, onAdd }: ServerRailPro
             >
               {initials(s.name)}
             </button>
+            {onDelete && (
+              <button
+                className="server-delete-btn"
+                onClick={e => { e.stopPropagation(); onDelete(s.id); }}
+                title={`Delete ${s.name}`}
+              >
+                <TrashIcon />
+              </button>
+            )}
           </div>
         ))}
       </div>
