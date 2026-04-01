@@ -13,7 +13,7 @@ interface HumSocket extends WebSocket {
 // ── Text chat types ───────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'typing_start' | 'typing_stop';
   spaceId?: number;
   channelId?: string;
   content?: string;
@@ -26,9 +26,13 @@ interface ClientMessage {
 
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
-      | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left';
+      | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left'
+      | 'typing';
   spaceId?: number;
   channelId?: string;
+  // typing indicator fields
+  isTyping?: boolean;
+  username?: string;
   message?: {
     id: number;
     spaceId: number;
@@ -75,6 +79,30 @@ function isWsRateLimited(userId: number): boolean {
   if (entry.count >= WS_RATE_MAX) return true;
   entry.count++;
   return false;
+}
+
+
+// ── Typing state ──────────────────────────────────────────────────────────────
+// roomKey -> Map<userId, auto-clear timer>
+
+const typingTimers = new Map<string, Map<number, ReturnType<typeof setTimeout>>>();
+
+function broadcastTyping(spaceId: number, channelId: string, socket: HumSocket, isTyping: boolean) {
+  if (socket.userId === undefined || !socket.username) return;
+  broadcast(spaceId, channelId, {
+    type: 'typing',
+    userId: socket.userId,
+    username: socket.username,
+    isTyping,
+  }, socket);
+}
+
+function clearTypingTimer(key: string, userId: number) {
+  const timers = typingTimers.get(key);
+  if (!timers) return;
+  const t = timers.get(userId);
+  if (t !== undefined) { clearTimeout(t); timers.delete(userId); }
+  if (timers.size === 0) typingTimers.delete(key);
 }
 
 // ── Text chat rooms ───────────────────────────────────────────────────────────

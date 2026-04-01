@@ -691,6 +691,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-shrink: 0;
 }
 
+/* ── Typing indicator ──────────────────────────────────────────────────────────────────────────── */
+.typing-indicator {
+  padding: 4px 20px 2px;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  font-style: italic;
+  flex-shrink: 0;
+  min-height: 20px;
+}
+
 /* ── Compose ─────────────────────────────────────────────────────────────── */
 .compose {
   border-top: 1px solid var(--border);
