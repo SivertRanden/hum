@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { queries, Channel } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware.js';
-import { broadcast } from '../ws.js';
+import { broadcast, getOnlineUserIds } from '../ws.js';
 
 const router = Router();
 
@@ -153,7 +153,8 @@ router.get('/:id/members', requireAuth, (req: AuthRequest, res: Response) => {
   const space = queries.getSpaceById.get(spaceId);
   if (!space) { res.status(404).json({ error: 'space not found' }); return; }
   const members = queries.listSpaceMembers.all(spaceId);
-  res.json(members);
+  const onlineIds = getOnlineUserIds();
+  res.json(members.map(m => ({ ...m, is_online: onlineIds.has(m.user_id) })));
 });
 
 // ── Invites ───────────────────────────────────────────────────────────────────

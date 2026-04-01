@@ -92,6 +92,13 @@ try {
   // Column already exists — safe to ignore
 }
 
+// Migration: add last_seen_at column to users for presence tracking
+try {
+  db.exec('ALTER TABLE users ADD COLUMN last_seen_at INTEGER');
+} catch {
+  // Column already exists — safe to ignore
+}
+
 // Migration: seed default channels for existing spaces that have none
 db.exec(`
   INSERT OR IGNORE INTO channels (space_id, name, type, created_by)
@@ -113,6 +120,7 @@ export interface User {
   username: string;
   password_hash: string;
   created_at: number;
+  last_seen_at: number | null;
 }
 
 export interface Space {
@@ -203,8 +211,8 @@ export const queries = {
     'UPDATE messages SET deleted_at = unixepoch() WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
   ),
 
-  listSpaceMembers: db.prepare<[number], SpaceMember & { username: string }>(`
-    SELECT sm.*, u.username
+  listSpaceMembers: db.prepare<[number], SpaceMember & { username: string; last_seen_at: number | null }>(`
+    SELECT sm.*, u.username, u.last_seen_at
     FROM space_members sm
     JOIN users u ON u.id = sm.user_id
     WHERE sm.space_id = ?
@@ -215,6 +223,10 @@ export const queries = {
   ),
   getSpaceMember: db.prepare<[number, number], SpaceMember>(
     'SELECT * FROM space_members WHERE space_id = ? AND user_id = ?'
+  ),
+
+  updateLastSeen: db.prepare<[number]>(
+    'UPDATE users SET last_seen_at = unixepoch() WHERE id = ?'
   ),
 
   createInviteToken: db.prepare<[string, number, number, number | null]>(
