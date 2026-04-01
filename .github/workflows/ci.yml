@@ -50,3 +50,9 @@ jobs:
         run: pnpm build
         env:
           DATABASE_URL: ${{ matrix.database_url }}
+
+      - name: Check migrations (PostgreSQL)
+        if: matrix.db == 'postgresql'
+        run: pnpm --filter @hum/server db:migrate
+        env:
+          DATABASE_URL: ${{ matrix.database_url }}

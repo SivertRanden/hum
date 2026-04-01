@@ -8,6 +8,7 @@ services:
       PORT: 3001
       # Set DATABASE_URL to use PostgreSQL (omit to fall back to SQLite)
       DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
       DB_PATH: /data/hum.db
       JWT_SECRET: ${JWT_SECRET}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost}
