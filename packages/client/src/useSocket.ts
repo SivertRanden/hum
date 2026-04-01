@@ -38,6 +38,7 @@ type ServerEvent =
   | { type: 'message:edit'; message: HumMessage }
   | { type: 'message:delete'; messageId: number }
   | { type: 'error'; error: string }
+  | { type: 'typing'; userId: number; username: string; isTyping: boolean }
   | VoiceServerEvent
   | PresenceUpdate;
 
@@ -51,10 +52,11 @@ interface UseSocketOptions {
   onMessageEdit?: (msg: HumMessage) => void;
   onMessageDelete?: (messageId: number) => void;
   onVoiceEvent?: (event: VoiceServerEvent) => void;
+  onTyping?: (userId: number, username: string, isTyping: boolean) => void;
   onPresenceUpdate?: (update: PresenceUpdate) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onPresenceUpdate }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -77,6 +79,12 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
   const onMessageDeleteRef = useRef(onMessageDelete);
   onMessageDeleteRef.current = onMessageDelete;
 
+  const onTypingRef = useRef(onTyping);
+  onTypingRef.current = onTyping;
+
+  const onPresenceUpdateRef = useRef(onPresenceUpdate);
+  onPresenceUpdateRef.current = onPresenceUpdate;
+
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
@@ -86,6 +94,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
   const sendMessage = useCallback((content: string) => {
     send({ type: 'message', content });
   }, [send]);
+
+  const sendTypingStart = useCallback(() => send({ type: 'typing_start' }), [send]);
+  const sendTypingStop = useCallback(() => send({ type: 'typing_stop' }), [send]);
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -113,6 +124,7 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       else if (event.type === 'message:edit') onMessageEditRef.current?.(event.message);
       else if (event.type === 'message:delete') onMessageDeleteRef.current?.(event.messageId);
       else if (event.type === 'error') onError(event.error);
+      else if (event.type === 'typing') onTypingRef.current?.(event.userId, event.username, event.isTyping);
       else if (event.type === 'presence_update') {
         onPresenceUpdateRef.current?.(event as PresenceUpdate);
       }
@@ -137,5 +149,5 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
     }
   }, [spaceId, channelId, token]);
 
-  return { sendMessage, send };
+  return { sendMessage, sendTypingStart, sendTypingStop, send };
 }

@@ -13,7 +13,7 @@ interface HumSocket extends WebSocket {
 // ── Text chat types ───────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'typing_start' | 'typing_stop';
   spaceId?: number;
   channelId?: string;
   content?: string;
@@ -27,9 +27,12 @@ interface ClientMessage {
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left'
-      | 'presence_update';
+      | 'typing' | 'presence_update';
   spaceId?: number;
   channelId?: string;
+  // typing indicator fields
+  isTyping?: boolean;
+  username?: string;
   message?: {
     id: number;
     spaceId: number;
@@ -79,6 +82,29 @@ function isWsRateLimited(userId: number): boolean {
   if (entry.count >= WS_RATE_MAX) return true;
   entry.count++;
   return false;
+}
+
+// ── Typing state ──────────────────────────────────────────────────────────────
+// roomKey -> Map<userId, auto-clear timer>
+
+const typingTimers = new Map<string, Map<number, ReturnType<typeof setTimeout>>>();
+
+function broadcastTyping(spaceId: number, channelId: string, socket: HumSocket, isTyping: boolean) {
+  if (socket.userId === undefined || !socket.username) return;
+  broadcast(spaceId, channelId, {
+    type: 'typing',
+    userId: socket.userId,
+    username: socket.username,
+    isTyping,
+  }, socket);
+}
+
+function clearTypingTimer(key: string, userId: number) {
+  const timers = typingTimers.get(key);
+  if (!timers) return;
+  const t = timers.get(userId);
+  if (t !== undefined) { clearTimeout(t); timers.delete(userId); }
+  if (timers.size === 0) typingTimers.delete(key);
 }
 
 // ── Presence tracking ─────────────────────────────────────────────────────────
@@ -366,13 +392,39 @@ export function createWsServer(server: import('http').Server) {
         return;
       }
 
+      // ── typing_start / typing_stop ────────────────────────────────────────
+      if (msg.type === 'typing_start' || msg.type === 'typing_stop') {
+        if (!socket.userId || socket.spaceId === undefined || socket.channelId === undefined) return;
+        const key = roomKey(socket.spaceId, socket.channelId);
+        if (msg.type === 'typing_start') {
+          broadcastTyping(socket.spaceId, socket.channelId, socket, true);
+          clearTypingTimer(key, socket.userId);
+          if (!typingTimers.has(key)) typingTimers.set(key, new Map());
+          typingTimers.get(key)!.set(socket.userId, setTimeout(() => {
+            if (socket.spaceId !== undefined && socket.channelId !== undefined) {
+              broadcastTyping(socket.spaceId, socket.channelId, socket, false);
+            }
+            clearTypingTimer(key, socket.userId!);
+          }, 3000));
+        } else {
+          broadcastTyping(socket.spaceId, socket.channelId, socket, false);
+          clearTypingTimer(key, socket.userId);
+        }
+        return;
+      }
+
       socket.send(JSON.stringify({ type: 'error', error: 'unknown message type' } satisfies ServerMessage));
     });
 
     socket.on('close', () => {
-      // Clean up text chat room
+      // Clean up text chat room and typing state
       if (socket.spaceId !== undefined && socket.channelId !== undefined) {
         rooms.get(roomKey(socket.spaceId, socket.channelId))?.delete(socket);
+        if (socket.userId !== undefined) {
+          const key = roomKey(socket.spaceId, socket.channelId);
+          broadcastTyping(socket.spaceId, socket.channelId, socket, false);
+          clearTypingTimer(key, socket.userId);
+        }
       }
       // Clean up space connections
       if (socket.spaceId !== undefined) {

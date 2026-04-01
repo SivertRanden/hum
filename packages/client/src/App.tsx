@@ -437,11 +437,8 @@ export default function App() {
           onMessageEdit,
           onMessageDelete,
           onVoiceEvent: (evt) => handleVoiceEvent(evt),
-<<<<<<< HEAD
-          onPresenceUpdate,
-=======
           onTyping,
->>>>>>> origin/main
+          onPresenceUpdate,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
