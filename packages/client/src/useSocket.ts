@@ -72,7 +72,7 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       else if (event.type === 'error') onError(event.error);
     };
 
-    ws.onclose = () => { wsRef.current = null; };
+    ws.onclose = () => { if (wsRef.current === ws) wsRef.current = null; };
 
     return () => { ws.close(); };
   }, [token]); // reconnect only if token changes
