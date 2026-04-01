@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Prevent direct pushes to main/master.
+# All changes must go through a pull request.
+
+remote="$1"
+
+while read local_ref local_oid remote_ref remote_oid
+do
+  branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
+
+  if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+    echo >&2 ""
+    echo >&2 "ERROR: Direct push to '$branch' is not allowed."
+    echo >&2 ""
+    echo >&2 "All changes must go through a pull request:"
+    echo >&2 "  1. Push to a feature branch"
+    echo >&2 "  2. Open a PR on GitHub targeting 'main'"
+    echo >&2 "  3. Merge only after CI passes"
+    echo >&2 ""
+    exit 1
+  fi
+done
+
+exit 0
