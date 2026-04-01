@@ -82,6 +82,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
   const onTypingRef = useRef(onTyping);
   onTypingRef.current = onTyping;
 
+  const onPresenceUpdateRef = useRef(onPresenceUpdate);
+  onPresenceUpdateRef.current = onPresenceUpdate;
+
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
