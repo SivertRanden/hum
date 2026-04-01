@@ -27,6 +27,16 @@ db.exec(`
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
 
+  CREATE TABLE IF NOT EXISTS channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'text',
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE(space_id, name, type)
+  );
+
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
@@ -46,6 +56,13 @@ try {
   // Column already exists — safe to ignore
 }
 
+// Migration: seed default channels for existing spaces that have none
+db.exec(`
+  INSERT OR IGNORE INTO channels (space_id, name, type, created_by)
+  SELECT s.id, 'general', 'text', s.created_by FROM spaces s
+  WHERE NOT EXISTS (SELECT 1 FROM channels WHERE space_id = s.id);
+`);
+
 export default db;
 
 // Typed query helpers
@@ -60,6 +77,15 @@ export interface Space {
   id: number;
   name: string;
   description: string | null;
+  created_by: number;
+  created_at: number;
+}
+
+export interface Channel {
+  id: number;
+  space_id: number;
+  name: string;
+  type: 'text' | 'voice';
   created_by: number;
   created_at: number;
 }
@@ -82,6 +108,11 @@ export const queries = {
   listSpaces: db.prepare<[], Space>('SELECT * FROM spaces ORDER BY name ASC'),
   getSpaceById: db.prepare<[number], Space>('SELECT * FROM spaces WHERE id = ?'),
   createSpace: db.prepare<[string, string | null, number]>('INSERT INTO spaces (name, description, created_by) VALUES (?, ?, ?)'),
+
+  listChannels: db.prepare<[number], Channel>('SELECT * FROM channels WHERE space_id = ? ORDER BY type ASC, name ASC'),
+  getChannelById: db.prepare<[number], Channel>('SELECT * FROM channels WHERE id = ?'),
+  createChannel: db.prepare<[number, string, string, number]>('INSERT INTO channels (space_id, name, type, created_by) VALUES (?, ?, ?, ?)'),
+  deleteChannel: db.prepare<[number, number]>('DELETE FROM channels WHERE id = ? AND space_id = ?'),
 
   getMessages: db.prepare<[number, string, number], Message>(`
     SELECT m.*, u.username
