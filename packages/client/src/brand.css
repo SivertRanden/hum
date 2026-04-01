@@ -1,0 +1,69 @@
+/*
+ * Hum — Brand CSS Custom Properties
+ * Source of truth: ../brand.tokens.json
+ *
+ * Usage: @import './brand.css'; then reference --hum-* variables.
+ * These map 1-to-1 with brand.tokens.json so a build step can
+ * auto-generate this file from the token source if needed.
+ */
+
+:root {
+  /* ── Colors: Brand ─────────────────────────────────────────────────────── */
+  --hum-orange:      #FF6200;
+  --hum-orange-dim:  #D45300;
+  --hum-orange-glow: rgba(255, 98, 0, 0.18);
+
+  /* ── Colors: Backgrounds ────────────────────────────────────────────────── */
+  --hum-bg:       #0d0d0d;
+  --hum-surface:  #161616;
+  --hum-raised:   #1e1e1e;
+
+  /* ── Colors: Borders ────────────────────────────────────────────────────── */
+  --hum-border: #2a2a2a;
+
+  /* ── Colors: Text ───────────────────────────────────────────────────────── */
+  --hum-text:       #e8e8e8;
+  --hum-text-muted: #888888;
+
+  /* ── Colors: Status ─────────────────────────────────────────────────────── */
+  --hum-error:   #f56565;
+  --hum-success: #4ade80;
+
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  --hum-font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --hum-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --hum-text-xs:   11px;
+  --hum-text-sm:   12px;
+  --hum-text-base: 14px;
+  --hum-text-md:   16px;
+  --hum-text-logo: 40px;
+
+  --hum-font-normal: 400;
+  --hum-font-medium: 500;
+  --hum-font-bold:   700;
+
+  --hum-tracking-tight: -0.04em; /* logo wordmark */
+  --hum-tracking-caps:   0.08em; /* ALL-CAPS section labels */
+
+  /* ── Spacing ─────────────────────────────────────────────────────────────── */
+  --hum-space-1: 4px;
+  --hum-space-2: 8px;
+  --hum-space-3: 12px;
+  --hum-space-4: 16px;
+  --hum-space-5: 20px;
+  --hum-space-6: 24px;
+
+  /* ── Radii ───────────────────────────────────────────────────────────────── */
+  --hum-radius-sm: 6px;
+  --hum-radius-md: 8px;
+  --hum-radius-lg: 12px;
+  --hum-radius-xl: 16px;
+
+  /* ── Layout ──────────────────────────────────────────────────────────────── */
+  --hum-sidebar-w: 220px;
+
+  /* ── Transitions ─────────────────────────────────────────────────────────── */
+  --hum-transition-fast:   0.12s ease;
+  --hum-transition-normal: 0.2s ease;
+}

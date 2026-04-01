@@ -1,16 +1,19 @@
-/* ── Reset & tokens ──────────────────────────────────────────────────────── */
+/* ── Brand tokens ────────────────────────────────────────────────────────── */
+@import './brand.css';
+
+/* ── App-level aliases (mapped from brand tokens) ─────────────────────── */
 :root {
-  --bg: #0d0d0d;
-  --surface: #161616;
-  --surface2: #1e1e1e;
-  --border: #2a2a2a;
-  --accent: #7c6ff7;
-  --accent-dim: #5c52d5;
-  --text: #e8e8e8;
-  --text-dim: #888;
-  --red: #f56565;
-  --radius: 8px;
-  --sidebar-w: 220px;
+  --bg:         var(--hum-bg);
+  --surface:    var(--hum-surface);
+  --surface2:   var(--hum-raised);
+  --border:     var(--hum-border);
+  --accent:     var(--hum-orange);
+  --accent-dim: var(--hum-orange-dim);
+  --text:       var(--hum-text);
+  --text-dim:   var(--hum-text-muted);
+  --red:        var(--hum-error);
+  --radius:     var(--hum-radius-md);
+  --sidebar-w:  var(--hum-sidebar-w);
 }
 
 /* ── Auth ────────────────────────────────────────────────────────────────── */
@@ -170,7 +173,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-shrink: 0;
   font-size: 0.8rem;
 }
-.message.mine .msg-username { color: #4ade80; }
+.message.mine .msg-username { color: var(--hum-orange); }
 
 .msg-content { color: var(--text); flex: 1; word-break: break-word; }
 

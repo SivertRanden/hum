@@ -1,0 +1,79 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$meta": {
+    "name": "Hum",
+    "version": "0.1.0",
+    "description": "Hum brand design tokens. The accent is a vivid orange that evokes warmth, voice, and energy — fitting for a space where people talk."
+  },
+  "color": {
+    "brand": {
+      "orange":     { "$value": "#FF6200", "$type": "color", "$description": "Primary brand color. Use for CTAs, active states, logo." },
+      "orangeDim":  { "$value": "#D45300", "$type": "color", "$description": "Hover / pressed state for orange elements." },
+      "orangeGlow": { "$value": "rgba(255, 98, 0, 0.18)", "$type": "color", "$description": "Focus ring and subtle highlight over dark surfaces." }
+    },
+    "background": {
+      "base":    { "$value": "#0d0d0d", "$type": "color", "$description": "App root background." },
+      "surface": { "$value": "#161616", "$type": "color", "$description": "Sidebar, cards, elevated panels." },
+      "raised":  { "$value": "#1e1e1e", "$type": "color", "$description": "Inputs, modals, secondary surfaces." }
+    },
+    "border": {
+      "default": { "$value": "#2a2a2a", "$type": "color" }
+    },
+    "text": {
+      "primary": { "$value": "#e8e8e8", "$type": "color" },
+      "muted":   { "$value": "#888888", "$type": "color" }
+    },
+    "status": {
+      "error":   { "$value": "#f56565", "$type": "color" },
+      "success": { "$value": "#4ade80", "$type": "color" }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": { "$value": "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", "$type": "fontFamily" },
+      "mono": { "$value": "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace", "$type": "fontFamily" }
+    },
+    "fontSize": {
+      "xs":   { "$value": "11px", "$type": "dimension" },
+      "sm":   { "$value": "12px", "$type": "dimension" },
+      "base": { "$value": "14px", "$type": "dimension" },
+      "md":   { "$value": "16px", "$type": "dimension" },
+      "lg":   { "$value": "20px", "$type": "dimension" },
+      "logo": { "$value": "40px", "$type": "dimension" }
+    },
+    "fontWeight": {
+      "normal": { "$value": 400, "$type": "fontWeight" },
+      "medium": { "$value": 500, "$type": "fontWeight" },
+      "bold":   { "$value": 700, "$type": "fontWeight" }
+    },
+    "letterSpacing": {
+      "tight": { "$value": "-0.04em", "$type": "dimension", "$description": "Logo wordmark." },
+      "caps":  { "$value": "0.08em",  "$type": "dimension", "$description": "Section headers in ALL-CAPS." }
+    },
+    "lineHeight": {
+      "tight":  { "$value": 1.2, "$type": "number" },
+      "normal": { "$value": 1.5, "$type": "number" }
+    }
+  },
+  "spacing": {
+    "1":  { "$value": "4px",  "$type": "dimension" },
+    "2":  { "$value": "8px",  "$type": "dimension" },
+    "3":  { "$value": "12px", "$type": "dimension" },
+    "4":  { "$value": "16px", "$type": "dimension" },
+    "5":  { "$value": "20px", "$type": "dimension" },
+    "6":  { "$value": "24px", "$type": "dimension" }
+  },
+  "borderRadius": {
+    "sm": { "$value": "6px",  "$type": "dimension" },
+    "md": { "$value": "8px",  "$type": "dimension" },
+    "lg": { "$value": "12px", "$type": "dimension" },
+    "xl": { "$value": "16px", "$type": "dimension" }
+  },
+  "dimension": {
+    "sidebarWidth": { "$value": "220px", "$type": "dimension" }
+  },
+  "transition": {
+    "fast":   { "$value": "0.12s ease", "$type": "duration" },
+    "normal": { "$value": "0.2s ease",  "$type": "duration" }
+  }
+}
