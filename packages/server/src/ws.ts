@@ -207,6 +207,7 @@ export function createWsServer(server: import('http').Server) {
     const activeVoiceRooms = new Set<string>(); // "<spaceId>:<channelId>"
 
     socket.on('message', async (raw) => {
+      try {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(raw.toString()) as ClientMessage;
@@ -413,6 +414,12 @@ export function createWsServer(server: import('http').Server) {
       }
 
       socket.send(JSON.stringify({ type: 'error', error: 'unknown message type' } satisfies ServerMessage));
+      } catch (err) {
+        console.error('[ws] unhandled error in message handler:', err);
+        try {
+          socket.send(JSON.stringify({ type: 'error', error: 'internal server error' } satisfies ServerMessage));
+        } catch { /* socket may be closed */ }
+      }
     });
 
     socket.on('close', () => {
