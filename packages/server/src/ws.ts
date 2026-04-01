@@ -26,7 +26,8 @@ interface ClientMessage {
 
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
-      | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left';
+      | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left'
+      | 'presence_update';
   spaceId?: number;
   channelId?: string;
   message?: {
@@ -48,6 +49,9 @@ interface ServerMessage {
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
   userId?: number;
+  // presence fields
+  isOnline?: boolean;
+  lastSeenAt?: number;
 }
 
 // ── Room key ─────────────────────────────────────────────────────────────────
@@ -77,6 +81,25 @@ function isWsRateLimited(userId: number): boolean {
   return false;
 }
 
+// ── Presence tracking ─────────────────────────────────────────────────────────
+// connectedUsers: userId -> all sockets for that user (across tabs)
+const connectedUsers = new Map<number, Set<HumSocket>>();
+// spaceConnections: spaceId -> all authenticated sockets currently in that space
+const spaceConnections = new Map<number, Set<HumSocket>>();
+
+export function getOnlineUserIds(): Set<number> {
+  return new Set(connectedUsers.keys());
+}
+
+function broadcastToSpace(spaceId: number, payload: ServerMessage, exclude?: HumSocket) {
+  const conns = spaceConnections.get(spaceId);
+  if (!conns) return;
+  const data = JSON.stringify(payload);
+  for (const s of conns) {
+    if (s !== exclude && s.readyState === WebSocket.OPEN) s.send(data);
+  }
+}
+
 // ── Text chat rooms ───────────────────────────────────────────────────────────
 
 const rooms = new Map<string, Set<HumSocket>>();
@@ -93,15 +116,21 @@ export function broadcast(spaceId: number, channelId: string, payload: ServerMes
 }
 
 function joinRoom(socket: HumSocket, spaceId: number, channelId: string) {
-  // Leave old room
+  // Leave old room and update space tracking if switching spaces
   if (socket.spaceId !== undefined && socket.channelId !== undefined) {
     rooms.get(roomKey(socket.spaceId, socket.channelId))?.delete(socket);
+    if (socket.spaceId !== spaceId) {
+      spaceConnections.get(socket.spaceId)?.delete(socket);
+    }
   }
   socket.spaceId = spaceId;
   socket.channelId = channelId;
   const key = roomKey(spaceId, channelId);
   if (!rooms.has(key)) rooms.set(key, new Set());
   rooms.get(key)!.add(socket);
+  // Track space-level connection for presence broadcasts
+  if (!spaceConnections.has(spaceId)) spaceConnections.set(spaceId, new Set());
+  spaceConnections.get(spaceId)!.add(socket);
 }
 
 // ── Voice rooms ───────────────────────────────────────────────────────────────
@@ -186,7 +215,24 @@ export function createWsServer(server: import('http').Server) {
           return;
         }
 
+        // Track presence: register user connection before joining room
+        const wasOffline = !connectedUsers.has(socket.userId);
+        if (!connectedUsers.has(socket.userId)) connectedUsers.set(socket.userId, new Set());
+        connectedUsers.get(socket.userId)!.add(socket);
+
         joinRoom(socket, spaceId, channelId);
+
+        // Broadcast online presence to others in space when user first connects
+        if (wasOffline) {
+          queries.updateLastSeen.run(socket.userId);
+          const now = Math.floor(Date.now() / 1000);
+          broadcastToSpace(spaceId, {
+            type: 'presence_update',
+            userId: socket.userId,
+            isOnline: true,
+            lastSeenAt: now,
+          }, socket);
+        }
 
         const history = queries.getMessages.all(spaceId, channelId, 100).map((m) => ({
           id: m.id,
@@ -211,7 +257,7 @@ export function createWsServer(server: import('http').Server) {
           return;
         }
         if (isWsRateLimited(socket.userId)) {
-          socket.send(JSON.stringify({ type: 'error', error: 'rate limit exceeded — slow down' } satisfies ServerMessage));
+          socket.send(JSON.stringify({ type: 'error', error: 'rate limit exceeded \u2014 slow down' } satisfies ServerMessage));
           return;
         }
         const content = msg.content?.trim();
@@ -327,6 +373,30 @@ export function createWsServer(server: import('http').Server) {
       // Clean up text chat room
       if (socket.spaceId !== undefined && socket.channelId !== undefined) {
         rooms.get(roomKey(socket.spaceId, socket.channelId))?.delete(socket);
+      }
+      // Clean up space connections
+      if (socket.spaceId !== undefined) {
+        spaceConnections.get(socket.spaceId)?.delete(socket);
+      }
+      // Clean up presence tracking and broadcast offline status
+      if (socket.userId !== undefined) {
+        const userSockets = connectedUsers.get(socket.userId);
+        if (userSockets) {
+          userSockets.delete(socket);
+          if (userSockets.size === 0) {
+            connectedUsers.delete(socket.userId);
+            queries.updateLastSeen.run(socket.userId);
+            const now = Math.floor(Date.now() / 1000);
+            if (socket.spaceId !== undefined) {
+              broadcastToSpace(socket.spaceId, {
+                type: 'presence_update',
+                userId: socket.userId,
+                isOnline: false,
+                lastSeenAt: now,
+              });
+            }
+          }
+        }
       }
       // Clean up all voice rooms this socket was in
       for (const key of activeVoiceRooms) {

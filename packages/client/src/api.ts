@@ -70,6 +70,8 @@ export interface SpaceMember {
   role: 'owner' | 'member';
   joined_at: number;
   username: string;
+  is_online?: boolean;
+  last_seen_at?: number | null;
 }
 
 export const api = {

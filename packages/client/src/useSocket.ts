@@ -24,6 +24,13 @@ export type VoiceServerEvent =
   | { type: 'voice:ice'; fromUserId: number; candidate: RTCIceCandidateInit }
   | { type: 'voice:peer_left'; userId: number };
 
+export interface PresenceUpdate {
+  type: 'presence_update';
+  userId: number;
+  isOnline: boolean;
+  lastSeenAt: number;
+}
+
 type ServerEvent =
   | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
@@ -31,7 +38,8 @@ type ServerEvent =
   | { type: 'message:edit'; message: HumMessage }
   | { type: 'message:delete'; messageId: number }
   | { type: 'error'; error: string }
-  | VoiceServerEvent;
+  | VoiceServerEvent
+  | PresenceUpdate;
 
 interface UseSocketOptions {
   token: string;
@@ -43,9 +51,10 @@ interface UseSocketOptions {
   onMessageEdit?: (msg: HumMessage) => void;
   onMessageDelete?: (messageId: number) => void;
   onVoiceEvent?: (event: VoiceServerEvent) => void;
+  onPresenceUpdate?: (update: PresenceUpdate) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onPresenceUpdate }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -58,6 +67,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
 
   const onVoiceEventRef = useRef(onVoiceEvent);
   onVoiceEventRef.current = onVoiceEvent;
+
+  const onPresenceUpdateRef = useRef(onPresenceUpdate);
+  onPresenceUpdateRef.current = onPresenceUpdate;
 
   const onMessageEditRef = useRef(onMessageEdit);
   onMessageEditRef.current = onMessageEdit;
@@ -101,6 +113,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       else if (event.type === 'message:edit') onMessageEditRef.current?.(event.message);
       else if (event.type === 'message:delete') onMessageDeleteRef.current?.(event.messageId);
       else if (event.type === 'error') onError(event.error);
+      else if (event.type === 'presence_update') {
+        onPresenceUpdateRef.current?.(event as PresenceUpdate);
+      }
       else if (event.type.startsWith('voice:')) {
         onVoiceEventRef.current?.(event as VoiceServerEvent);
       }

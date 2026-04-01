@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate } from './useSocket.js';
 import { useVoiceChat } from './useVoiceChat.js';
 import {
   Button,
@@ -393,6 +393,14 @@ export default function App() {
     setMessages(prev => prev.filter(m => m.id !== messageId));
   }, []);
 
+  const onPresenceUpdate = useCallback((update: PresenceUpdate) => {
+    setMembers(prev => prev.map(m =>
+      m.user_id === update.userId
+        ? { ...m, is_online: update.isOnline, last_seen_at: update.lastSeenAt }
+        : m
+    ));
+  }, []);
+
   const handleEditMessage = useCallback((id: number, content: string) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content, editedAt: Math.floor(Date.now() / 1000) } : m));
   }, []);
@@ -429,7 +437,11 @@ export default function App() {
           onMessageEdit,
           onMessageDelete,
           onVoiceEvent: (evt) => handleVoiceEvent(evt),
+<<<<<<< HEAD
+          onPresenceUpdate,
+=======
           onTyping,
+>>>>>>> origin/main
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
