@@ -261,12 +261,85 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   text-transform: uppercase;
   color: var(--text-dim);
   padding: 12px 16px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 8px;
 }
+
+.channel-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--hum-transition-fast), color var(--hum-transition-fast);
+}
+.channel-section:hover .channel-add-btn { opacity: 1; }
+.channel-add-btn:hover { color: var(--text); }
 
 .channel-list {
   list-style: none;
   padding: 0 8px;
 }
+
+.channel-list-item {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.channel-list-item .channel-item { flex: 1; }
+
+.channel-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  flex-shrink: 0;
+  margin-right: 4px;
+  transition: opacity var(--hum-transition-fast), color var(--hum-transition-fast);
+}
+.channel-list-item:hover .channel-delete-btn { opacity: 1; }
+.channel-delete-btn:hover { color: var(--hum-error, #e53e3e); }
+
+.channel-create-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 8px;
+}
+.channel-create-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  outline: none;
+}
+.channel-create-input:focus { border-color: var(--accent); }
+.channel-create-submit, .channel-create-cancel {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+.channel-create-submit { color: var(--accent); }
+.channel-create-submit:hover { background: var(--surface2); }
+.channel-create-cancel { color: var(--text-dim); }
+.channel-create-cancel:hover { color: var(--text); background: var(--surface2); }
 
 .channel-item {
   background: none;

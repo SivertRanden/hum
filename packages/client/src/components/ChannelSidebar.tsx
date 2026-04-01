@@ -1,17 +1,5 @@
-import { type Space } from '../api.js';
-
-// Static channel scaffold — a real server would fetch these from the API
-const TEXT_CHANNELS = [
-  { id: 'general', name: 'general' },
-  { id: 'announcements', name: 'announcements' },
-  { id: 'off-topic', name: 'off-topic' },
-];
-
-const VOICE_ROOMS = [
-  { id: 'voice:lounge', name: 'Lounge' },
-  { id: 'voice:gaming', name: 'Gaming' },
-  { id: 'voice:music', name: 'Music' },
-];
+import { useState } from 'react';
+import { type Space, type Channel } from '../api.js';
 
 interface ChannelSidebarProps {
   server: Space | null;
@@ -19,6 +7,13 @@ interface ChannelSidebarProps {
   onSelectChannel: (id: string) => void;
   username: string;
   onSignOut: () => void;
+  channels: Channel[];
+  onCreateChannel: (name: string, type: 'text' | 'voice') => Promise<void>;
+  onDeleteChannel: (channelId: number) => Promise<void>;
+}
+
+function channelClientId(ch: Channel): string {
+  return ch.type === 'voice' ? `voice:${ch.name}` : ch.name;
 }
 
 function HashIcon() {
@@ -45,7 +40,53 @@ function SignOutIcon() {
   );
 }
 
-export function ChannelSidebar({ server, activeChannelId, onSelectChannel, username, onSignOut }: ChannelSidebarProps) {
+function PlusIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+    </svg>
+  );
+}
+
+export function ChannelSidebar({
+  server,
+  activeChannelId,
+  onSelectChannel,
+  username,
+  onSignOut,
+  channels,
+  onCreateChannel,
+  onDeleteChannel,
+}: ChannelSidebarProps) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<'text' | 'voice'>('text');
+  const [creating, setCreating] = useState(false);
+
+  const textChannels = channels.filter(ch => ch.type === 'text');
+  const voiceChannels = channels.filter(ch => ch.type === 'voice');
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      await onCreateChannel(newName.trim(), newType);
+      setNewName('');
+      setShowCreate(false);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="channel-sidebar">
       <div className="channel-sidebar-header">
@@ -58,40 +99,101 @@ export function ChannelSidebar({ server, activeChannelId, onSelectChannel, usern
 
       <div className="channel-sidebar-body">
         <div className="channel-section">
-          <div className="channel-section-label">Text Channels</div>
+          <div className="channel-section-label">
+            Text Channels
+            {server && (
+              <button
+                className="channel-add-btn"
+                onClick={() => { setNewType('text'); setShowCreate(s => !s); }}
+                title="Add text channel"
+              >
+                <PlusIcon />
+              </button>
+            )}
+          </div>
           <ul className="channel-list">
-            {TEXT_CHANNELS.map(ch => (
-              <li key={ch.id}>
-                <button
-                  className={`channel-item${activeChannelId === ch.id ? ' active' : ''}`}
-                  onClick={() => onSelectChannel(ch.id)}
-                  disabled={!server}
-                >
-                  <HashIcon />
-                  <span>{ch.name}</span>
-                </button>
-              </li>
-            ))}
+            {textChannels.map(ch => {
+              const clientId = channelClientId(ch);
+              return (
+                <li key={ch.id} className="channel-list-item">
+                  <button
+                    className={`channel-item${activeChannelId === clientId ? ' active' : ''}`}
+                    onClick={() => onSelectChannel(clientId)}
+                    disabled={!server}
+                  >
+                    <HashIcon />
+                    <span>{ch.name}</span>
+                  </button>
+                  <button
+                    className="channel-delete-btn"
+                    onClick={() => onDeleteChannel(ch.id)}
+                    title={`Delete #${ch.name}`}
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
 
         <div className="channel-section">
-          <div className="channel-section-label">Voice Rooms</div>
+          <div className="channel-section-label">
+            Voice Rooms
+            {server && (
+              <button
+                className="channel-add-btn"
+                onClick={() => { setNewType('voice'); setShowCreate(s => !s); }}
+                title="Add voice room"
+              >
+                <PlusIcon />
+              </button>
+            )}
+          </div>
           <ul className="channel-list">
-            {VOICE_ROOMS.map(room => (
-              <li key={room.id}>
-                <button
-                  className={`channel-item voice${activeChannelId === room.id ? ' active' : ''}`}
-                  onClick={() => onSelectChannel(room.id)}
-                  disabled={!server}
-                >
-                  <VolumeIcon />
-                  <span>{room.name}</span>
-                </button>
-              </li>
-            ))}
+            {voiceChannels.map(ch => {
+              const clientId = channelClientId(ch);
+              return (
+                <li key={ch.id} className="channel-list-item">
+                  <button
+                    className={`channel-item voice${activeChannelId === clientId ? ' active' : ''}`}
+                    onClick={() => onSelectChannel(clientId)}
+                    disabled={!server}
+                  >
+                    <VolumeIcon />
+                    <span>{ch.name}</span>
+                  </button>
+                  <button
+                    className="channel-delete-btn"
+                    onClick={() => onDeleteChannel(ch.id)}
+                    title={`Delete ${ch.name}`}
+                  >
+                    <TrashIcon />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
+
+        {showCreate && server && (
+          <form onSubmit={handleCreate} className="channel-create-form">
+            <input
+              autoFocus
+              className="channel-create-input"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder={newType === 'text' ? 'channel-name' : 'room-name'}
+              required
+            />
+            <button type="submit" disabled={creating} className="channel-create-submit">
+              {creating ? '…' : 'add'}
+            </button>
+            <button type="button" onClick={() => setShowCreate(false)} className="channel-create-cancel">
+              ✕
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="channel-sidebar-footer">

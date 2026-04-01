@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space } from './api.js';
+import { api, Space, Channel } from './api.js';
 import { useSocket, HumMessage } from './useSocket.js';
 import {
   Button,
@@ -135,6 +135,7 @@ export default function App() {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string>(DEFAULT_CHANNEL);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<HumMessage[]>([]);
   const [input, setInput] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
@@ -155,10 +156,43 @@ export default function App() {
     api.listSpaces(auth.token).then(setSpaces).catch(console.error);
   }, [auth]);
 
+  useEffect(() => {
+    if (!auth || !activeSpaceId) { setChannels([]); return; }
+    api.listChannels(auth.token, activeSpaceId).then(setChannels).catch(console.error);
+  }, [auth, activeSpaceId]);
+
   const handleSelectServer = (id: number) => {
     setActiveSpaceId(id);
     setActiveChannelId(DEFAULT_CHANNEL);
     setMessages([]);
+  };
+
+  const handleCreateChannel = async (name: string, type: 'text' | 'voice') => {
+    if (!auth || !activeSpaceId) return;
+    const ch = await api.createChannel(auth.token, activeSpaceId, name, type);
+    setChannels(prev => [...prev, ch]);
+    const clientId = type === 'voice' ? `voice:${name}` : name;
+    setActiveChannelId(clientId);
+    if (type !== 'voice') setMessages([]);
+  };
+
+  const handleDeleteChannel = async (channelId: number) => {
+    if (!auth || !activeSpaceId) return;
+    await api.deleteChannel(auth.token, activeSpaceId, channelId);
+    setChannels(prev => {
+      const remaining = prev.filter(ch => ch.id !== channelId);
+      // If deleted channel was active, switch to first available text channel or default
+      const deletedCh = prev.find(ch => ch.id === channelId);
+      if (deletedCh) {
+        const deletedClientId = deletedCh.type === 'voice' ? `voice:${deletedCh.name}` : deletedCh.name;
+        if (activeChannelId === deletedClientId) {
+          const firstText = remaining.find(ch => ch.type === 'text');
+          setActiveChannelId(firstText ? firstText.name : DEFAULT_CHANNEL);
+          setMessages([]);
+        }
+      }
+      return remaining;
+    });
   };
 
   const handleSelectChannel = (id: string) => {
@@ -229,6 +263,9 @@ export default function App() {
         onSelectChannel={handleSelectChannel}
         username={auth.username}
         onSignOut={handleSignOut}
+        channels={channels}
+        onCreateChannel={handleCreateChannel}
+        onDeleteChannel={handleDeleteChannel}
       />
 
       {/* Column 3: main content */}
