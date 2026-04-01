@@ -27,7 +27,7 @@ interface ClientMessage {
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left'
-      | 'typing' | 'presence_update';
+      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message';
   spaceId?: number;
   channelId?: string;
   // typing indicator fields
@@ -61,6 +61,13 @@ interface ServerMessage {
 
 function roomKey(spaceId: number, channelId: string): string {
   return `${spaceId}:${channelId}`;
+}
+
+// ── @mention parser ───────────────────────────────────────────────────────────
+
+function parseMentions(content: string): string[] {
+  const matches = content.matchAll(/@([a-zA-Z0-9_-]{2,32})/g);
+  return [...new Set([...matches].map(m => m[1].toLowerCase()))];
 }
 
 // ── WebSocket message rate limiter ────────────────────────────────────────────
@@ -310,6 +317,48 @@ export function createWsServer(server: import('http').Server) {
         };
 
         broadcast(socket.spaceId, socket.channelId, outbound);
+
+        // ── Notify other channels in space of new unread message ──────────
+        {
+          const newMsgPayload = JSON.stringify({
+            type: 'channel:new_message',
+            spaceId: socket.spaceId,
+            channelId: socket.channelId,
+          } satisfies ServerMessage);
+          const conns = spaceConnections.get(socket.spaceId);
+          if (conns) {
+            for (const s of conns) {
+              // Only notify sockets in a different channel (they didn't receive the full message)
+              if (s !== socket && s.channelId !== socket.channelId && s.readyState === WebSocket.OPEN) {
+                s.send(newMsgPayload);
+              }
+            }
+          }
+        }
+
+        // ── @mention detection ────────────────────────────────────────────
+        const mentionedUsernames = parseMentions(content);
+        if (mentionedUsernames.length > 0) {
+          const members = await queries.listSpaceMembers(socket.spaceId);
+          const mentionPayload = JSON.stringify({
+            type: 'mention',
+            message: outbound.message,
+          } satisfies ServerMessage);
+          for (const member of members) {
+            if (
+              member.user_id !== socket.userId &&
+              mentionedUsernames.includes(member.username.toLowerCase())
+            ) {
+              const sockets = connectedUsers.get(member.user_id);
+              if (sockets) {
+                for (const s of sockets) {
+                  if (s.readyState === WebSocket.OPEN) s.send(mentionPayload);
+                }
+              }
+            }
+          }
+        }
+
         return;
       }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent } from './useSocket.js';
 import { useVoiceChat } from './useVoiceChat.js';
 import {
   Button,
@@ -84,17 +84,34 @@ function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
   );
 }
 
+// ── @mention rendering ────────────────────────────────────────────────────────
+
+function renderMessageContent(content: string, myUsername: string): React.ReactNode {
+  const parts = content.split(/(@[a-zA-Z0-9_-]{2,32})/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      const mentioned = part.slice(1).toLowerCase();
+      const isMe = mentioned === myUsername.toLowerCase();
+      return (
+        <span key={i} className={`mention${isMe ? ' mention-me' : ''}`}>{part}</span>
+      );
+    }
+    return part;
+  });
+}
+
 // ── Message list ─────────────────────────────────────────────────────────────
 interface MessageListProps {
   messages: HumMessage[];
   myUserId: number;
+  myUsername: string;
   token: string;
   activeSpaceId: number | null;
   onEditMessage: (id: number, content: string) => void;
   onDeleteMessage: (id: number) => void;
 }
 
-function MessageList({ messages, myUserId, token, activeSpaceId, onEditMessage, onDeleteMessage }: MessageListProps) {
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -162,7 +179,7 @@ function MessageList({ messages, myUserId, token, activeSpaceId, onEditMessage, 
           ) : (
             <>
               <span className="msg-content">
-                {m.content}
+                {renderMessageContent(m.content, myUsername)}
                 {m.editedAt && <span className="msg-edited"> (edited)</span>}
               </span>
               {m.userId === myUserId && (
@@ -303,6 +320,14 @@ export default function App() {
     setAuth(null);
   };
 
+  // Request browser notification permission once authenticated
+  useEffect(() => {
+    if (!auth) return;
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+  }, [auth]);
+
   useEffect(() => {
     if (!auth) return;
     api.listSpaces(auth.token).then(setSpaces).catch(console.error);
@@ -418,6 +443,15 @@ export default function App() {
     });
   }, []);
 
+  const onMention = useCallback((event: MentionEvent) => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const { message } = event;
+    new Notification(`${message.username} mentioned you in #${message.channelId}`, {
+      body: message.content,
+      tag: `mention-${message.id}`,
+    });
+  }, []);
+
   // Clear typing state when switching channels or spaces
   useEffect(() => {
     setTypingUsers(new Map());
@@ -439,6 +473,7 @@ export default function App() {
           onVoiceEvent: (evt) => handleVoiceEvent(evt),
           onTyping,
           onPresenceUpdate,
+          onMention,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -578,6 +613,7 @@ export default function App() {
                 <MessageList
                   messages={messages}
                   myUserId={auth.userId}
+                  myUsername={auth.username}
                   token={auth.token}
                   activeSpaceId={activeSpaceId}
                   onEditMessage={handleEditMessage}
