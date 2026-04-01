@@ -31,12 +31,13 @@ router.post('/', requireAuth, (req: AuthRequest, res: Response) => {
 router.get('/:id/messages', requireAuth, (req: AuthRequest, res: Response) => {
   const spaceId = Number(req.params.id);
   const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const channel = typeof req.query.channel === 'string' ? req.query.channel : 'general';
   const space = queries.getSpaceById.get(spaceId);
   if (!space) {
     res.status(404).json({ error: 'space not found' });
     return;
   }
-  const messages = queries.getMessages.all(spaceId, limit);
+  const messages = queries.getMessages.all(spaceId, channel, limit);
   res.json(messages);
 });
 

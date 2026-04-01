@@ -178,10 +178,12 @@ export default function App() {
     console.error('[ws]', err);
   }, []);
 
+  const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
+
   const { sendMessage } = useSocket(
     auth
-      ? { token: auth.token, spaceId: activeSpaceId, onMessage, onHistory, onError }
-      : { token: '', spaceId: null, onMessage, onHistory, onError }
+      ? { token: auth.token, spaceId: activeSpaceId, channelId: socketChannelId, onMessage, onHistory, onError }
+      : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
 
   const handleSend = (e: React.FormEvent) => {

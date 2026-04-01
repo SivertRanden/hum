@@ -3,6 +3,7 @@ import { useEffect, useRef, useCallback } from 'react';
 export interface HumMessage {
   id: number;
   spaceId: number;
+  channelId: string;
   userId: number;
   username: string;
   content: string;
@@ -10,7 +11,7 @@ export interface HumMessage {
 }
 
 type ServerEvent =
-  | { type: 'joined'; spaceId: number }
+  | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
   | { type: 'message'; message: HumMessage }
   | { type: 'error'; error: string };
@@ -18,14 +19,16 @@ type ServerEvent =
 interface UseSocketOptions {
   token: string;
   spaceId: number | null;
+  channelId: string | null;
   onMessage: (msg: HumMessage) => void;
   onHistory: (msgs: HumMessage[]) => void;
   onError: (err: string) => void;
 }
 
-export function useSocket({ token, spaceId, onMessage, onHistory, onError }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
+  const joinedChannelRef = useRef<string | null>(null);
 
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -42,11 +45,13 @@ export function useSocket({ token, spaceId, onMessage, onHistory, onError }: Use
     const ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
     wsRef.current = ws;
     joinedSpaceRef.current = null;
+    joinedChannelRef.current = null;
 
     ws.onopen = () => {
-      if (spaceId !== null) {
-        ws.send(JSON.stringify({ type: 'join', spaceId, token }));
+      if (spaceId !== null && channelId !== null) {
+        ws.send(JSON.stringify({ type: 'join', spaceId, channelId, token }));
         joinedSpaceRef.current = spaceId;
+        joinedChannelRef.current = channelId;
       }
     };
 
@@ -62,15 +67,16 @@ export function useSocket({ token, spaceId, onMessage, onHistory, onError }: Use
     return () => { ws.close(); };
   }, [token]); // reconnect only if token changes
 
-  // Join new space without reconnecting
+  // Join new space/channel without reconnecting
   useEffect(() => {
-    if (spaceId === null) return;
-    if (joinedSpaceRef.current === spaceId) return;
+    if (spaceId === null || channelId === null) return;
+    if (joinedSpaceRef.current === spaceId && joinedChannelRef.current === channelId) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'join', spaceId, token }));
+      wsRef.current.send(JSON.stringify({ type: 'join', spaceId, channelId, token }));
       joinedSpaceRef.current = spaceId;
+      joinedChannelRef.current = channelId;
     }
-  }, [spaceId, token]);
+  }, [spaceId, channelId, token]);
 
   return { sendMessage };
 }

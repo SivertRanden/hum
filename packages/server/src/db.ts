@@ -31,12 +31,20 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id),
+    channel TEXT NOT NULL DEFAULT 'general',
     content TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
 
-  CREATE INDEX IF NOT EXISTS idx_messages_space_id ON messages(space_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_messages_space_id ON messages(space_id, channel, created_at);
 `);
+
+// Migration: add channel column if it doesn't exist yet (for existing DBs)
+try {
+  db.exec("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'");
+} catch {
+  // Column already exists — safe to ignore
+}
 
 export default db;
 
@@ -60,6 +68,7 @@ export interface Message {
   id: number;
   space_id: number;
   user_id: number;
+  channel: string;
   content: string;
   created_at: number;
   username?: string;
@@ -74,15 +83,15 @@ export const queries = {
   getSpaceById: db.prepare<[number], Space>('SELECT * FROM spaces WHERE id = ?'),
   createSpace: db.prepare<[string, string | null, number]>('INSERT INTO spaces (name, description, created_by) VALUES (?, ?, ?)'),
 
-  getMessages: db.prepare<[number, number], Message>(`
+  getMessages: db.prepare<[number, string, number], Message>(`
     SELECT m.*, u.username
     FROM messages m
     JOIN users u ON u.id = m.user_id
-    WHERE m.space_id = ?
+    WHERE m.space_id = ? AND m.channel = ?
     ORDER BY m.created_at ASC
     LIMIT ?
   `),
-  insertMessage: db.prepare<[number, number, string]>(
-    'INSERT INTO messages (space_id, user_id, content) VALUES (?, ?, ?)'
+  insertMessage: db.prepare<[number, number, string, string]>(
+    'INSERT INTO messages (space_id, user_id, channel, content) VALUES (?, ?, ?, ?)'
   ),
 };

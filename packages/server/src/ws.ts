@@ -7,11 +7,13 @@ interface HumSocket extends WebSocket {
   userId?: number;
   username?: string;
   spaceId?: number;
+  channelId?: string;
 }
 
 interface ClientMessage {
   type: 'join' | 'message';
   spaceId?: number;
+  channelId?: string;
   content?: string;
   token?: string;
 }
@@ -19,9 +21,11 @@ interface ClientMessage {
 interface ServerMessage {
   type: 'joined' | 'message' | 'error' | 'history';
   spaceId?: number;
+  channelId?: string;
   message?: {
     id: number;
     spaceId: number;
+    channelId: string;
     userId: number;
     username: string;
     content: string;
@@ -31,11 +35,15 @@ interface ServerMessage {
   error?: string;
 }
 
-// Map of spaceId -> Set of connected sockets
-const rooms = new Map<number, Set<HumSocket>>();
+// Room key: "<spaceId>:<channelId>"
+function roomKey(spaceId: number, channelId: string): string {
+  return `${spaceId}:${channelId}`;
+}
 
-function broadcast(spaceId: number, payload: ServerMessage, exclude?: HumSocket) {
-  const room = rooms.get(spaceId);
+const rooms = new Map<string, Set<HumSocket>>();
+
+function broadcast(spaceId: number, channelId: string, payload: ServerMessage, exclude?: HumSocket) {
+  const room = rooms.get(roomKey(spaceId, channelId));
   if (!room) return;
   const data = JSON.stringify(payload);
   for (const client of room) {
@@ -45,14 +53,16 @@ function broadcast(spaceId: number, payload: ServerMessage, exclude?: HumSocket)
   }
 }
 
-function joinRoom(socket: HumSocket, spaceId: number) {
+function joinRoom(socket: HumSocket, spaceId: number, channelId: string) {
   // Leave old room
-  if (socket.spaceId !== undefined) {
-    rooms.get(socket.spaceId)?.delete(socket);
+  if (socket.spaceId !== undefined && socket.channelId !== undefined) {
+    rooms.get(roomKey(socket.spaceId, socket.channelId))?.delete(socket);
   }
   socket.spaceId = spaceId;
-  if (!rooms.has(spaceId)) rooms.set(spaceId, new Set());
-  rooms.get(spaceId)!.add(socket);
+  socket.channelId = channelId;
+  const key = roomKey(spaceId, channelId);
+  if (!rooms.has(key)) rooms.set(key, new Set());
+  rooms.get(key)!.add(socket);
 }
 
 export function createWsServer(server: import('http').Server) {
@@ -86,18 +96,21 @@ export function createWsServer(server: import('http').Server) {
         }
 
         const spaceId = Number(msg.spaceId);
+        const channelId = msg.channelId ?? 'general';
+
         const space = queries.getSpaceById.get(spaceId);
         if (!space) {
           socket.send(JSON.stringify({ type: 'error', error: 'space not found' } satisfies ServerMessage));
           return;
         }
 
-        joinRoom(socket, spaceId);
+        joinRoom(socket, spaceId, channelId);
 
-        // Send history
-        const history = queries.getMessages.all(spaceId, 100).map((m) => ({
+        // Send channel history
+        const history = queries.getMessages.all(spaceId, channelId, 100).map((m) => ({
           id: m.id,
           spaceId: m.space_id,
+          channelId: m.channel,
           userId: m.user_id,
           username: m.username ?? '',
           content: m.content,
@@ -105,12 +118,12 @@ export function createWsServer(server: import('http').Server) {
         }));
 
         socket.send(JSON.stringify({ type: 'history', messages: history } satisfies ServerMessage));
-        socket.send(JSON.stringify({ type: 'joined', spaceId } satisfies ServerMessage));
+        socket.send(JSON.stringify({ type: 'joined', spaceId, channelId } satisfies ServerMessage));
         return;
       }
 
       if (msg.type === 'message') {
-        if (!socket.userId || socket.spaceId === undefined) {
+        if (!socket.userId || socket.spaceId === undefined || socket.channelId === undefined) {
           socket.send(JSON.stringify({ type: 'error', error: 'join a space first' } satisfies ServerMessage));
           return;
         }
@@ -120,7 +133,7 @@ export function createWsServer(server: import('http').Server) {
           return;
         }
 
-        const result = queries.insertMessage.run(socket.spaceId, socket.userId, content);
+        const result = queries.insertMessage.run(socket.spaceId, socket.userId, socket.channelId, content);
         const messageId = Number(result.lastInsertRowid);
         const now = Math.floor(Date.now() / 1000);
 
@@ -129,6 +142,7 @@ export function createWsServer(server: import('http').Server) {
           message: {
             id: messageId,
             spaceId: socket.spaceId,
+            channelId: socket.channelId,
             userId: socket.userId,
             username: socket.username ?? '',
             content,
@@ -136,8 +150,8 @@ export function createWsServer(server: import('http').Server) {
           },
         };
 
-        // Broadcast to everyone in the room including sender
-        broadcast(socket.spaceId, outbound);
+        // Broadcast to everyone in the channel room including sender
+        broadcast(socket.spaceId, socket.channelId, outbound);
         return;
       }
 
@@ -145,8 +159,8 @@ export function createWsServer(server: import('http').Server) {
     });
 
     socket.on('close', () => {
-      if (socket.spaceId !== undefined) {
-        rooms.get(socket.spaceId)?.delete(socket);
+      if (socket.spaceId !== undefined && socket.channelId !== undefined) {
+        rooms.get(roomKey(socket.spaceId, socket.channelId))?.delete(socket);
       }
     });
   });
