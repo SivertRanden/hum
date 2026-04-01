@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Voice-first communication — stripped back to what matters.",
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@8.5.1",
   "workspaces": [
     "packages/*"
   ],
