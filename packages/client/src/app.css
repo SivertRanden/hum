@@ -517,6 +517,147 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .voice-join-btn:hover { opacity: 0.85; }
 
+/* ── Voice room (active / live state) ───────────────────────────────────────── */
+.voice-room-active {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.voice-room-active-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.voice-live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hum-success);
+}
+
+.voice-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hum-success);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.voice-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.voice-ctrl-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 7px 14px;
+  transition: background var(--hum-transition-fast), color var(--hum-transition-fast);
+}
+.voice-ctrl-btn:hover { background: var(--border); }
+.voice-ctrl-btn.muted { color: var(--red); border-color: var(--red); }
+.voice-ctrl-btn.muted:hover { background: color-mix(in srgb, var(--red) 15%, transparent); }
+.voice-ctrl-btn.leave { color: var(--red); }
+.voice-ctrl-btn.leave:hover { background: color-mix(in srgb, var(--red) 15%, transparent); }
+
+/* ── Voice participants (main area) ─────────────────────────────────────────── */
+.voice-participants {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 16px;
+  padding: 24px 20px;
+  overflow-y: auto;
+}
+
+.voice-participant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 80px;
+}
+
+.voice-participant-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.voice-participant.me .voice-participant-avatar {
+  border-color: var(--hum-success);
+}
+
+.voice-participant-name {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-align: center;
+  word-break: break-all;
+}
+
+/* ── Voice participant list in sidebar ──────────────────────────────────────── */
+.voice-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--hum-success);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.voice-participant-list {
+  list-style: none;
+  padding: 2px 0 4px 24px;
+}
+
+.voice-participant-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 2px 8px;
+}
+
+.voice-participant-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hum-success);
+  flex-shrink: 0;
+}
+
 /* ── Messages ────────────────────────────────────────────────────────────── */
 .message-list {
   flex: 1;
