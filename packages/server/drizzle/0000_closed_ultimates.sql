@@ -1,4 +1,4 @@
-CREATE TABLE `channels` (
+CREATE TABLE IF NOT EXISTS `channels` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`space_id` integer NOT NULL,
 	`name` text NOT NULL,
@@ -9,8 +9,8 @@ CREATE TABLE `channels` (
 	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `channels_space_name_type_unique` ON `channels` (`space_id`,`name`,`type`);--> statement-breakpoint
-CREATE TABLE `invite_tokens` (
+CREATE UNIQUE INDEX IF NOT EXISTS `channels_space_name_type_unique` ON `channels` (`space_id`,`name`,`type`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `invite_tokens` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`token` text NOT NULL,
 	`space_id` integer NOT NULL,
@@ -23,8 +23,8 @@ CREATE TABLE `invite_tokens` (
 	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `invite_tokens_token_unique` ON `invite_tokens` (`token`);--> statement-breakpoint
-CREATE TABLE `messages` (
+CREATE UNIQUE INDEX IF NOT EXISTS `invite_tokens_token_unique` ON `invite_tokens` (`token`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `messages` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`space_id` integer NOT NULL,
 	`user_id` integer NOT NULL,
@@ -37,8 +37,8 @@ CREATE TABLE `messages` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE INDEX `idx_messages_space_id` ON `messages` (`space_id`,`channel`,`created_at`);--> statement-breakpoint
-CREATE TABLE `space_members` (
+CREATE INDEX IF NOT EXISTS `idx_messages_space_id` ON `messages` (`space_id`,`channel`,`created_at`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `space_members` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`space_id` integer NOT NULL,
 	`user_id` integer NOT NULL,
@@ -48,8 +48,8 @@ CREATE TABLE `space_members` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `space_members_space_user_unique` ON `space_members` (`space_id`,`user_id`);--> statement-breakpoint
-CREATE TABLE `spaces` (
+CREATE UNIQUE INDEX IF NOT EXISTS `space_members_space_user_unique` ON `space_members` (`space_id`,`user_id`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `spaces` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`description` text,
@@ -58,8 +58,8 @@ CREATE TABLE `spaces` (
 	FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `spaces_name_unique` ON `spaces` (`name`);--> statement-breakpoint
-CREATE TABLE `users` (
+CREATE UNIQUE INDEX IF NOT EXISTS `spaces_name_unique` ON `spaces` (`name`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `users` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`username` text NOT NULL,
 	`password_hash` text NOT NULL,
@@ -67,4 +67,4 @@ CREATE TABLE `users` (
 	`last_seen_at` integer
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);
+CREATE UNIQUE INDEX IF NOT EXISTS `users_username_unique` ON `users` (`username`);
