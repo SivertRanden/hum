@@ -795,6 +795,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-style: italic;
 }
 
+.mention {
+  color: #818cf8;
+  font-weight: 600;
+  background: rgba(129, 140, 248, 0.1);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.mention-me {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+
 .msg-edit-form {
   display: flex;
   align-items: center;

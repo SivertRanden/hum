@@ -31,6 +31,11 @@ export interface PresenceUpdate {
   lastSeenAt: number;
 }
 
+export interface MentionEvent {
+  type: 'mention';
+  message: HumMessage;
+}
+
 type ServerEvent =
   | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
@@ -40,7 +45,8 @@ type ServerEvent =
   | { type: 'error'; error: string }
   | { type: 'typing'; userId: number; username: string; isTyping: boolean }
   | VoiceServerEvent
-  | PresenceUpdate;
+  | PresenceUpdate
+  | MentionEvent;
 
 interface UseSocketOptions {
   token: string;
@@ -54,9 +60,10 @@ interface UseSocketOptions {
   onVoiceEvent?: (event: VoiceServerEvent) => void;
   onTyping?: (userId: number, username: string, isTyping: boolean) => void;
   onPresenceUpdate?: (update: PresenceUpdate) => void;
+  onMention?: (event: MentionEvent) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -81,6 +88,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
 
   const onTypingRef = useRef(onTyping);
   onTypingRef.current = onTyping;
+
+  const onMentionRef = useRef(onMention);
+  onMentionRef.current = onMention;
 
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -124,6 +134,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       else if (event.type === 'typing') onTypingRef.current?.(event.userId, event.username, event.isTyping);
       else if (event.type === 'presence_update') {
         onPresenceUpdateRef.current?.(event as PresenceUpdate);
+      }
+      else if (event.type === 'mention') {
+        onMentionRef.current?.(event as MentionEvent);
       }
       else if (event.type.startsWith('voice:')) {
         onVoiceEventRef.current?.(event as VoiceServerEvent);
