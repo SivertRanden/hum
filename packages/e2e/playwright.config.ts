@@ -19,6 +19,7 @@ export default defineConfig({
     baseURL: `http://localhost:${CLIENT_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
   projects: [
     {
