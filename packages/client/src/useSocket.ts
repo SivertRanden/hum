@@ -30,6 +30,12 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
 
+  // Always-current refs so async callbacks (onopen) never use stale closure values
+  const spaceIdRef = useRef(spaceId);
+  const channelIdRef = useRef(channelId);
+  spaceIdRef.current = spaceId;
+  channelIdRef.current = channelId;
+
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
@@ -48,10 +54,14 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
     joinedChannelRef.current = null;
 
     ws.onopen = () => {
-      if (spaceId !== null && channelId !== null) {
-        ws.send(JSON.stringify({ type: 'join', spaceId, channelId, token }));
-        joinedSpaceRef.current = spaceId;
-        joinedChannelRef.current = channelId;
+      // Use refs here so we always see the current spaceId/channelId,
+      // even if the WS opened after the user already selected a server.
+      const sid = spaceIdRef.current;
+      const cid = channelIdRef.current;
+      if (sid !== null && cid !== null) {
+        ws.send(JSON.stringify({ type: 'join', spaceId: sid, channelId: cid, token }));
+        joinedSpaceRef.current = sid;
+        joinedChannelRef.current = cid;
       }
     };
 
