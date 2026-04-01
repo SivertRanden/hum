@@ -35,6 +35,16 @@ Use descriptive branch names tied to the issue:
 - `feat/hum-13-voice-channels`
 - `fix/hum-14-websocket-reconnect`
 
+## Unblocking Dependent Tasks (Required Workflow)
+
+When you complete a task (mark it `done`), you MUST check for blocked tasks that depend on your work:
+
+1. Search for blocked issues in the project: `GET /api/companies/{companyId}/issues?status=blocked&projectId={projectId}`
+2. For each blocked issue, read its description. If it contains a "Depends on" reference to the task you just completed, update that issue's status from `blocked` to `todo` with a comment explaining the dependency is resolved.
+3. This ensures dependent work is picked up promptly instead of sitting in `blocked` indefinitely.
+
+This is a Paperclip workflow gap — there is no automatic unblocking. Agents must handle it manually.
+
 ## Project Structure
 
 This is a pnpm monorepo. Run commands from the root or the specific package directory.
