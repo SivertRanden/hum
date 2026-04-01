@@ -309,7 +309,8 @@ async function buildPgQueries(): Promise<Queries> {
   await migrate(migrationDb, { migrationsFolder: MIGRATIONS_FOLDER });
   await migrationClient.end();
 
-  const appClient = postgres(DATABASE_URL);
+  const poolSize = parseInt(process.env.DATABASE_POOL_SIZE ?? '10', 10);
+  const appClient = postgres(DATABASE_URL, { max: poolSize });
   const db = drizzle(appClient, { schema: pgSchema });
 
   const nowEpoch = sql`extract(epoch from now())::int`;

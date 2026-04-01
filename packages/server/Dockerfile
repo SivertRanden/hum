@@ -32,8 +32,10 @@ COPY packages/server/package.json ./packages/server/
 # Install production deps only
 RUN pnpm install --frozen-lockfile --filter @hum/server --prod
 
-# Copy compiled output
+# Copy compiled output and migration folders
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
+COPY --from=builder /app/packages/server/drizzle ./packages/server/drizzle
+COPY --from=builder /app/packages/server/drizzle.pg ./packages/server/drizzle.pg
 
 # Data directory for SQLite DB
 RUN mkdir -p /data

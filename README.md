@@ -42,12 +42,13 @@ pnpm --filter @hum/client dev
 
 Both packages work out of the box with no configuration. If you need to override defaults:
 
-| Variable        | Default                  | Description                              |
-| --------------- | ------------------------ | ---------------------------------------- |
-| `PORT`          | `3001`                   | Port the API server listens on           |
-| `CLIENT_ORIGIN` | `http://localhost:5173`  | Allowed CORS origin for the client       |
-| `DATABASE_URL`  | _(unset — uses SQLite)_  | PostgreSQL connection string (opt-in)    |
-| `DB_PATH`       | `hum.db` (repo root)     | SQLite file path (ignored when PG in use)|
+| Variable             | Default                  | Description                                                                      |
+| -------------------- | ------------------------ | -------------------------------------------------------------------------------- |
+| `PORT`               | `3001`                   | Port the API server listens on                                                   |
+| `CLIENT_ORIGIN`      | `http://localhost:5173`  | Allowed CORS origin for the client                                               |
+| `DATABASE_URL`       | _(unset — uses SQLite)_  | PostgreSQL connection string (opt-in). Use the **pooler URL** for Neon.          |
+| `DATABASE_POOL_SIZE` | `10`                     | Max PostgreSQL connections in the pool. Ignored when using SQLite.               |
+| `DB_PATH`            | `hum.db` (repo root)     | SQLite file path (ignored when PG in use)                                        |
 
 Set variables in your shell or create a `.env` file in `packages/server/` before running.
 
@@ -102,6 +103,33 @@ docker compose up -d
 The `postgres` service starts automatically and the backend runs migrations on first boot.
 
 > **Tip:** Generate a secure JWT secret with `openssl rand -base64 32`.
+
+### Cloud hosting with Neon (serverless PostgreSQL)
+
+[Neon](https://neon.tech) is the recommended managed PostgreSQL provider for cloud deployments. It scales to zero, has a generous free tier, and bundles pgBouncer connection pooling out of the box — no extra services needed.
+
+**1. Create a Neon project** at neon.tech and copy the **pooler connection string** (the endpoint URL contains `.pooler.`):
+
+```
+postgresql://user:password@ep-xxx.pooler.us-east-2.aws.neon.tech/neondb?sslmode=require
+```
+
+**2. Set environment variables** in your deployment:
+
+```bash
+DATABASE_URL=postgresql://user:password@ep-xxx.pooler.us-east-2.aws.neon.tech/neondb?sslmode=require
+DATABASE_POOL_SIZE=10   # pgBouncer manages the server-side pool; keep this ≤ 10
+JWT_SECRET=$(openssl rand -base64 32)
+CLIENT_ORIGIN=https://your-frontend-domain.com
+```
+
+**3. Deploy with Docker** (no postgres service needed — Neon is external):
+
+```bash
+docker compose up -d frontend
+```
+
+The backend connects to Neon on startup and applies any pending migrations automatically. The `postgres` service in `docker-compose.yml` is only used for self-hosted deployments; when `DATABASE_URL` points to an external host, you can skip starting it.
 
 ## Project structure
 
