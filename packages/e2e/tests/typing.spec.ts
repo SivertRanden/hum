@@ -10,19 +10,25 @@ test.describe('Typing indicators', () => {
     // User A
     const ctxA = await browser.newContext();
     const pageA = await ctxA.newPage();
+    // Mock clipboard so tests work in headless CI (no clipboard permission needed)
+    await pageA.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        get() {
+          return {
+            writeText(text: string) { (window as any).__clipboardText = text; return Promise.resolve(); },
+            readText() { return Promise.resolve((window as any).__clipboardText ?? ''); },
+          };
+        },
+      });
+    });
     const usernameA = uniqueUser('typA');
     await register(pageA, usernameA);
     const spaceName = `TypingSpace_${Date.now()}`;
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Get the invite link from page A so user B can join
-    // Instead, we'll register user B and use the API directly.
-    // Easier: user B joins by navigating to the app as well (both in same space).
-    // We need user B to be a member of the same space.
-    // The simplest approach: have user A create an invite and user B joins via it.
     await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    // The invite link is copied to clipboard — read it via the page
     const inviteToken = await pageA.evaluate(async () => {
       return navigator.clipboard.readText();
     });
@@ -62,6 +68,18 @@ test.describe('Typing indicators', () => {
   test('typing indicator disappears after inactivity', async ({ browser }) => {
     const ctxA = await browser.newContext();
     const pageA = await ctxA.newPage();
+    // Mock clipboard so tests work in headless CI (no clipboard permission needed)
+    await pageA.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        get() {
+          return {
+            writeText(text: string) { (window as any).__clipboardText = text; return Promise.resolve(); },
+            readText() { return Promise.resolve((window as any).__clipboardText ?? ''); },
+          };
+        },
+      });
+    });
     const usernameA = uniqueUser('inactA');
     await register(pageA, usernameA);
     const spaceName = `InactSpace_${Date.now()}`;
