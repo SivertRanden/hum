@@ -22,6 +22,17 @@ async function get<T>(path: string, token: string): Promise<T> {
   return data;
 }
 
+async function patch<T>(path: string, body: unknown, token: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json() as T & { error?: string };
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Request failed');
+  return data;
+}
+
 async function del(path: string, token: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, { method: 'DELETE', headers: authHeaders(token) });
   if (!res.ok && res.status !== 204) {
@@ -52,6 +63,15 @@ export interface Channel {
   created_at: number;
 }
 
+export interface SpaceMember {
+  id: number;
+  space_id: number;
+  user_id: number;
+  role: 'owner' | 'member';
+  joined_at: number;
+  username: string;
+}
+
 export const api = {
   register: (username: string, password: string) =>
     post<AuthResponse>('/auth/register', { username, password }),
@@ -72,4 +92,23 @@ export const api = {
 
   deleteChannel: (token: string, spaceId: number, channelId: number) =>
     del(`/spaces/${spaceId}/channels/${channelId}`, token),
+
+  editMessage: (token: string, spaceId: number, messageId: number, content: string) =>
+    patch<{ id: number; content: string; editedAt: number }>(
+      `/spaces/${spaceId}/messages/${messageId}`,
+      { content },
+      token,
+    ),
+
+  deleteMessage: (token: string, spaceId: number, messageId: number) =>
+    del(`/spaces/${spaceId}/messages/${messageId}`, token),
+
+  listMembers: (token: string, spaceId: number) =>
+    get<SpaceMember[]>(`/spaces/${spaceId}/members`, token),
+
+  createInvite: (token: string, spaceId: number) =>
+    post<{ token: string; expiresAt: number }>(`/spaces/${spaceId}/invites`, {}, token),
+
+  joinByInvite: (token: string, inviteToken: string) =>
+    post<{ space: Space }>(`/invite/${inviteToken}/join`, {}, token),
 };

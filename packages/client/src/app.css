@@ -589,3 +589,64 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .modal-actions button:first-child { background: var(--surface); color: var(--text-dim); }
 .modal-actions button:first-child:hover { background: var(--border); }
+
+/* ── Message actions (edit/delete) ───────────────────────────────────────── */
+.message { position: relative; }
+.message:hover .msg-actions { opacity: 1; }
+
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.msg-action-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.msg-action-btn:hover { background: var(--surface3, var(--surface2)); color: var(--text); }
+.msg-action-delete:hover { color: #f87171; }
+
+.msg-edited {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+.msg-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.msg-edit-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.875rem;
+  outline: none;
+  padding: 2px 8px;
+}
+
+.msg-edit-save, .msg-edit-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+.msg-edit-save:hover { border-color: var(--accent); color: var(--accent); }
+.msg-edit-cancel:hover { color: var(--text); }

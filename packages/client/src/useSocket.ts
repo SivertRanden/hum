@@ -8,13 +8,30 @@ export interface HumMessage {
   username: string;
   content: string;
   createdAt: number;
+  editedAt?: number;
 }
+
+export interface VoicePeer {
+  userId: number;
+  username: string;
+}
+
+export type VoiceServerEvent =
+  | { type: 'voice:joined'; spaceId: number; channelId: string; peers: VoicePeer[] }
+  | { type: 'voice:presence'; spaceId: number; channelId: string; peers: VoicePeer[] }
+  | { type: 'voice:offer'; fromUserId: number; sdp: RTCSessionDescriptionInit }
+  | { type: 'voice:answer'; fromUserId: number; sdp: RTCSessionDescriptionInit }
+  | { type: 'voice:ice'; fromUserId: number; candidate: RTCIceCandidateInit }
+  | { type: 'voice:peer_left'; userId: number };
 
 type ServerEvent =
   | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
   | { type: 'message'; message: HumMessage }
-  | { type: 'error'; error: string };
+  | { type: 'message:edit'; message: HumMessage }
+  | { type: 'message:delete'; messageId: number }
+  | { type: 'error'; error: string }
+  | VoiceServerEvent;
 
 interface UseSocketOptions {
   token: string;
@@ -23,9 +40,12 @@ interface UseSocketOptions {
   onMessage: (msg: HumMessage) => void;
   onHistory: (msgs: HumMessage[]) => void;
   onError: (err: string) => void;
+  onMessageEdit?: (msg: HumMessage) => void;
+  onMessageDelete?: (messageId: number) => void;
+  onVoiceEvent?: (event: VoiceServerEvent) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -35,6 +55,15 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
   const channelIdRef = useRef(channelId);
   spaceIdRef.current = spaceId;
   channelIdRef.current = channelId;
+
+  const onVoiceEventRef = useRef(onVoiceEvent);
+  onVoiceEventRef.current = onVoiceEvent;
+
+  const onMessageEditRef = useRef(onMessageEdit);
+  onMessageEditRef.current = onMessageEdit;
+
+  const onMessageDeleteRef = useRef(onMessageDelete);
+  onMessageDeleteRef.current = onMessageDelete;
 
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -69,7 +98,12 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       const event = JSON.parse(evt.data as string) as ServerEvent;
       if (event.type === 'history') onHistory(event.messages);
       else if (event.type === 'message') onMessage(event.message);
+      else if (event.type === 'message:edit') onMessageEditRef.current?.(event.message);
+      else if (event.type === 'message:delete') onMessageDeleteRef.current?.(event.messageId);
       else if (event.type === 'error') onError(event.error);
+      else if (event.type.startsWith('voice:')) {
+        onVoiceEventRef.current?.(event as VoiceServerEvent);
+      }
     };
 
     ws.onclose = () => { if (wsRef.current === ws) wsRef.current = null; };
@@ -88,5 +122,5 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
     }
   }, [spaceId, channelId, token]);
 
-  return { sendMessage };
+  return { sendMessage, send };
 }
