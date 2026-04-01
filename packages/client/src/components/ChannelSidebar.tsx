@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { type Space, type Channel } from '../api.js';
+import { type VoicePeer } from '../useSocket.js';
 
 interface ChannelSidebarProps {
   server: Space | null;
@@ -10,6 +11,8 @@ interface ChannelSidebarProps {
   channels: Channel[];
   onCreateChannel: (name: string, type: 'text' | 'voice') => Promise<void>;
   onDeleteChannel: (channelId: number) => Promise<void>;
+  voiceParticipants: VoicePeer[];
+  activeVoiceRoomId: string | null;
 }
 
 function channelClientId(ch: Channel): string {
@@ -65,6 +68,8 @@ export function ChannelSidebar({
   channels,
   onCreateChannel,
   onDeleteChannel,
+  voiceParticipants,
+  activeVoiceRoomId,
 }: ChannelSidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -153,23 +158,41 @@ export function ChannelSidebar({
           <ul className="channel-list">
             {voiceChannels.map(ch => {
               const clientId = channelClientId(ch);
+              const isActive = activeChannelId === clientId;
+              const isLive = activeVoiceRoomId === clientId;
+              const count = isLive ? voiceParticipants.length : 0;
               return (
-                <li key={ch.id} className="channel-list-item">
-                  <button
-                    className={`channel-item voice${activeChannelId === clientId ? ' active' : ''}`}
-                    onClick={() => onSelectChannel(clientId)}
-                    disabled={!server}
-                  >
-                    <VolumeIcon />
-                    <span>{ch.name}</span>
-                  </button>
-                  <button
-                    className="channel-delete-btn"
-                    onClick={() => onDeleteChannel(ch.id)}
-                    title={`Delete ${ch.name}`}
-                  >
-                    <TrashIcon />
-                  </button>
+                <li key={ch.id}>
+                  <div className="channel-list-item">
+                    <button
+                      className={`channel-item voice${isActive ? ' active' : ''}`}
+                      onClick={() => onSelectChannel(clientId)}
+                      disabled={!server}
+                    >
+                      <VolumeIcon />
+                      <span className="flex-1">{ch.name}</span>
+                      {isLive && count > 0 && (
+                        <span className="voice-count">{count}</span>
+                      )}
+                    </button>
+                    <button
+                      className="channel-delete-btn"
+                      onClick={() => onDeleteChannel(ch.id)}
+                      title={`Delete ${ch.name}`}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                  {isLive && voiceParticipants.length > 0 && (
+                    <ul className="voice-participant-list">
+                      {voiceParticipants.map(p => (
+                        <li key={p.userId} className="voice-participant-entry">
+                          <span className="voice-participant-dot" />
+                          {p.username}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               );
             })}
