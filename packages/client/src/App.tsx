@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel } from './api.js';
+import { api, Space, Channel, SpaceMember } from './api.js';
 import { useSocket, HumMessage, VoicePeer } from './useSocket.js';
 import { useVoiceChat } from './useVoiceChat.js';
 import {
@@ -284,6 +284,7 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string>(DEFAULT_CHANNEL);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<HumMessage[]>([]);
+  const [members, setMembers] = useState<SpaceMember[]>([]);
   const [input, setInput] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
@@ -308,6 +309,27 @@ export default function App() {
     if (!auth || !activeSpaceId) { setChannels([]); return; }
     api.listChannels(auth.token, activeSpaceId).then(setChannels).catch(console.error);
   }, [auth, activeSpaceId]);
+
+  useEffect(() => {
+    if (!auth || !activeSpaceId) { setMembers([]); return; }
+    api.listMembers(auth.token, activeSpaceId).then(setMembers).catch(console.error);
+  }, [auth, activeSpaceId]);
+
+  // Auto-join via invite token in URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteToken = params.get('invite');
+    if (!inviteToken || !auth) return;
+    // Clear the token from URL
+    window.history.replaceState({}, '', window.location.pathname);
+    api.joinByInvite(auth.token, inviteToken)
+      .then(({ space }) => {
+        setSpaces(prev => prev.some(s => s.id === space.id) ? prev : [...prev, space]);
+        handleSelectServer(space.id);
+      })
+      .catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth]);
 
   const handleSelectServer = (id: number) => {
     setActiveSpaceId(id);
@@ -420,6 +442,12 @@ export default function App() {
     setInput('');
   };
 
+  const handleCreateInvite = async (): Promise<string> => {
+    if (!auth || !activeSpaceId) throw new Error('no active space');
+    const { token } = await api.createInvite(auth.token, activeSpaceId);
+    return token;
+  };
+
   const handleCreateSpace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth || !newSpaceName.trim()) return;
@@ -461,6 +489,8 @@ export default function App() {
         onDeleteChannel={handleDeleteChannel}
         voiceParticipants={participants}
         activeVoiceRoomId={isInRoom ? activeChannelId : null}
+        members={members}
+        onCreateInvite={handleCreateInvite}
       />
 
       {/* Column 3: main content */}

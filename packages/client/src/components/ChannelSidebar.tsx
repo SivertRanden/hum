@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { type Space, type Channel } from '../api.js';
+import { type Space, type Channel, type SpaceMember } from '../api.js';
 import { type VoicePeer } from '../useSocket.js';
 
 interface ChannelSidebarProps {
@@ -13,6 +13,8 @@ interface ChannelSidebarProps {
   onDeleteChannel: (channelId: number) => Promise<void>;
   voiceParticipants: VoicePeer[];
   activeVoiceRoomId: string | null;
+  members: SpaceMember[];
+  onCreateInvite: () => Promise<string>;
 }
 
 function channelClientId(ch: Channel): string {
@@ -59,6 +61,15 @@ function TrashIcon() {
   );
 }
 
+
+function LinkIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+    </svg>
+  );
+}
+
 export function ChannelSidebar({
   server,
   activeChannelId,
@@ -70,11 +81,15 @@ export function ChannelSidebar({
   onDeleteChannel,
   voiceParticipants,
   activeVoiceRoomId,
+  members,
+  onCreateInvite,
 }: ChannelSidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<'text' | 'voice'>('text');
   const [creating, setCreating] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const textChannels = channels.filter(ch => ch.type === 'text');
   const voiceChannels = channels.filter(ch => ch.type === 'voice');
@@ -89,6 +104,18 @@ export function ChannelSidebar({
       setShowCreate(false);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    try {
+      const inviteToken = await onCreateInvite();
+      const url = `${window.location.origin}?invite=${inviteToken}`;
+      await navigator.clipboard.writeText(url);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      // ignore clipboard errors
     }
   };
 
@@ -198,6 +225,40 @@ export function ChannelSidebar({
             })}
           </ul>
         </div>
+
+        {server && members.length > 0 && (
+          <div className="channel-section">
+            <div className="channel-section-label">
+              <button
+                className="channel-section-toggle"
+                onClick={() => setShowMembers(s => !s)}
+              >
+                Members ({members.length})
+              </button>
+              <button
+                className="channel-add-btn"
+                onClick={handleInvite}
+                title={inviteCopied ? 'Copied!' : 'Copy invite link'}
+              >
+                <LinkIcon />
+              </button>
+            </div>
+            {showMembers && (
+              <ul className="channel-list">
+                {members.map((m: SpaceMember) => (
+                  <li key={m.id} className="member-entry">
+                    <div className="member-avatar">{m.username.slice(0, 2).toUpperCase()}</div>
+                    <span className="member-name">{m.username}</span>
+                    {m.role === 'owner' && <span className="member-role">owner</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {inviteCopied && (
+              <div className="invite-copied-toast">Invite link copied!</div>
+            )}
+          </div>
+        )}
 
         {showCreate && server && (
           <form onSubmit={handleCreate} className="channel-create-form">
