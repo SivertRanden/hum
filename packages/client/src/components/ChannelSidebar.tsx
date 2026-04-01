@@ -247,7 +247,10 @@ export function ChannelSidebar({
               <ul className="channel-list">
                 {members.map((m: SpaceMember) => (
                   <li key={m.id} className="member-entry">
-                    <div className="member-avatar">{m.username.slice(0, 2).toUpperCase()}</div>
+                    <div className="member-avatar-wrap">
+                      <div className="member-avatar">{m.username.slice(0, 2).toUpperCase()}</div>
+                      <span className={m.is_online ? 'presence-dot online' : 'presence-dot offline'} />
+                    </div>
                     <span className="member-name">{m.username}</span>
                     {m.role === 'owner' && <span className="member-role">owner</span>}
                   </li>
