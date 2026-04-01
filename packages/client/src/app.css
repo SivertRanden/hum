@@ -202,7 +202,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 50%;
   background: var(--surface);
   border: none;
-  color: var(--hum-success);
+  color: var(--accent);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -212,7 +212,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .server-add-btn:hover {
   border-radius: 30%;
-  background: var(--hum-success);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -432,7 +432,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .voice-join-btn {
-  background: var(--hum-success);
+  background: var(--accent);
   border: none;
   border-radius: var(--radius-md);
   color: #fff;
