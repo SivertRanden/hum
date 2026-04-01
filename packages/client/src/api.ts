@@ -86,6 +86,9 @@ export const api = {
   createSpace: (token: string, name: string, description?: string) =>
     post<Space>('/spaces', { name, description }, token),
 
+  deleteSpace: (token: string, spaceId: number) =>
+    del(`/spaces/${spaceId}`, token),
+
   listChannels: (token: string, spaceId: number) =>
     get<Channel[]>(`/spaces/${spaceId}/channels`, token),
 

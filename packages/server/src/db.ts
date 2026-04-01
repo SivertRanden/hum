@@ -180,6 +180,7 @@ export const queries = {
   listSpaces: db.prepare<[], Space>('SELECT * FROM spaces ORDER BY name ASC'),
   getSpaceById: db.prepare<[number], Space>('SELECT * FROM spaces WHERE id = ?'),
   createSpace: db.prepare<[string, string | null, number]>('INSERT INTO spaces (name, description, created_by) VALUES (?, ?, ?)'),
+  deleteSpace: db.prepare<[number, number]>('DELETE FROM spaces WHERE id = ? AND created_by = ?'),
 
   listChannels: db.prepare<[number], Channel>('SELECT * FROM channels WHERE space_id = ? ORDER BY type ASC, name ASC'),
   getChannelById: db.prepare<[number], Channel>('SELECT * FROM channels WHERE id = ?'),

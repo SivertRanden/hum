@@ -289,6 +289,9 @@ export default function App() {
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
+  const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
 
   const handleAuth = useCallback((a: AuthState) => {
     localStorage.setItem('hum_auth', JSON.stringify(a));
@@ -406,9 +409,23 @@ export default function App() {
     setMessages(prev => prev.filter(m => m.id !== id));
   }, []);
 
+  const onTyping = useCallback((userId: number, username: string, isTyping: boolean) => {
+    setTypingUsers(prev => {
+      const next = new Map(prev);
+      if (isTyping) next.set(userId, username);
+      else next.delete(userId);
+      return next;
+    });
+  }, []);
+
+  // Clear typing state when switching channels or spaces
+  useEffect(() => {
+    setTypingUsers(new Map());
+  }, [activeChannelId, activeSpaceId]);
+
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
 
-  const { sendMessage, send } = useSocket(
+  const { sendMessage, sendTypingStart, sendTypingStop, send } = useSocket(
     auth
       ? {
           token: auth.token,
@@ -420,7 +437,11 @@ export default function App() {
           onMessageEdit,
           onMessageDelete,
           onVoiceEvent: (evt) => handleVoiceEvent(evt),
+<<<<<<< HEAD
           onPresenceUpdate,
+=======
+          onTyping,
+>>>>>>> origin/main
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -444,10 +465,25 @@ export default function App() {
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    if (!isTypingRef.current) {
+      sendTypingStart();
+      isTypingRef.current = true;
+    }
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = setTimeout(() => {
+      sendTypingStop();
+      isTypingRef.current = false;
+    }, 3000);
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
     sendMessage(input.trim());
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    if (isTypingRef.current) { sendTypingStop(); isTypingRef.current = false; }
     setInput('');
   };
 
@@ -455,6 +491,17 @@ export default function App() {
     if (!auth || !activeSpaceId) throw new Error('no active space');
     const { token } = await api.createInvite(auth.token, activeSpaceId);
     return token;
+  };
+
+  const handleDeleteSpace = async (id: number) => {
+    if (!auth) return;
+    await api.deleteSpace(auth.token, id);
+    setSpaces(prev => prev.filter(s => s.id !== id));
+    if (activeSpaceId === id) {
+      setActiveSpaceId(null);
+      setChannels([]);
+      setMessages([]);
+    }
   };
 
   const handleCreateSpace = async (e: React.FormEvent) => {
@@ -484,6 +531,7 @@ export default function App() {
         activeId={activeSpaceId}
         onSelect={handleSelectServer}
         onAdd={() => setShowCreateSpace(true)}
+        onDelete={handleDeleteSpace}
       />
 
       {/* Column 2: channel sidebar */}
@@ -538,10 +586,15 @@ export default function App() {
                   onEditMessage={handleEditMessage}
                   onDeleteMessage={handleDeleteMessage}
                 />
+                {typingUsers.size > 0 && (
+                  <div className="typing-indicator">
+                    {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing…
+                  </div>
+                )}
                 <form className="compose" onSubmit={handleSend}>
                   <Input
                     value={input}
-                    onChange={e => setInput(e.target.value)}
+                    onChange={handleInputChange}
                     placeholder={`Message #${activeChannelId}…`}
                     autoFocus
                     className="flex-1"

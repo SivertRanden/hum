@@ -34,6 +34,15 @@ router.post('/', requireAuth, (req: AuthRequest, res: Response) => {
   }
 });
 
+router.delete('/:id', requireAuth, (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = queries.getSpaceById.get(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  if (space.created_by !== req.user!.userId) { res.status(403).json({ error: 'only the owner can delete this server' }); return; }
+  queries.deleteSpace.run(spaceId, req.user!.userId);
+  res.status(204).end();
+});
+
 router.get('/:id/channels', requireAuth, (req: AuthRequest, res: Response) => {
   const spaceId = Number(req.params.id);
   const space = queries.getSpaceById.get(spaceId);
