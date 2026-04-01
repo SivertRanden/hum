@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space } from './api.js';
 import { useSocket, HumMessage } from './useSocket.js';
+import {
+  Button,
+  Input,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from './components/ui/index.js';
 import './app.css';
 
 interface AuthState {
@@ -38,19 +47,25 @@ function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
       <h1 className="logo">hum</h1>
       <p className="tagline">your voice. your people. your space.</p>
       <form onSubmit={submit} className="auth-form">
-        <input
+        <Input
           value={username} onChange={e => setUsername(e.target.value)}
           placeholder="username" autoComplete="username" required
         />
-        <input
+        <Input
           type="password" value={password} onChange={e => setPassword(e.target.value)}
           placeholder="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required
         />
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={loading}>{loading ? '…' : mode === 'login' ? 'sign in' : 'create account'}</button>
-        <button type="button" className="link-btn" onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}>
+        <Button type="submit" disabled={loading}>
+          {loading ? '…' : mode === 'login' ? 'sign in' : 'create account'}
+        </Button>
+        <Button
+          type="button"
+          variant="link"
+          onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
+        >
           {mode === 'login' ? 'no account? register' : 'have an account? sign in'}
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -134,13 +149,11 @@ export default function App() {
     setAuth(null);
   };
 
-  // Load spaces when authed
   useEffect(() => {
     if (!auth) return;
     api.listSpaces(auth.token).then(setSpaces).catch(console.error);
   }, [auth]);
 
-  // Reset messages when space changes
   const handleSelectSpace = (id: number) => {
     setActiveSpaceId(id);
     setMessages([]);
@@ -201,46 +214,51 @@ export default function App() {
       <div className="main">
         <header className="main-header">
           <span>{activeSpace ? `# ${activeSpace.name}` : 'pick a space'}</span>
-          <button className="link-btn sign-out" onClick={handleSignOut}>sign out</button>
+          <Button variant="ghost" size="sm" onClick={handleSignOut} className="sign-out">
+            sign out
+          </Button>
         </header>
 
         {activeSpaceId
           ? <>
               <MessageList messages={messages} myUserId={auth.userId} />
               <form className="compose" onSubmit={handleSend}>
-                <input
+                <Input
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   placeholder={`message #${activeSpace?.name ?? ''}…`}
                   autoFocus
+                  className="flex-1"
                 />
-                <button type="submit" disabled={!input.trim()}>send</button>
+                <Button type="submit" disabled={!input.trim()} size="sm">send</Button>
               </form>
             </>
           : <div className="pick-space">pick a space to start talking</div>
         }
       </div>
 
-      {showCreateSpace && (
-        <div className="modal-overlay" onClick={() => setShowCreateSpace(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>new space</h2>
-            <form onSubmit={handleCreateSpace}>
-              <input
-                autoFocus
-                value={newSpaceName}
-                onChange={e => setNewSpaceName(e.target.value)}
-                placeholder="space name"
-                required
-              />
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowCreateSpace(false)}>cancel</button>
-                <button type="submit">create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={showCreateSpace} onOpenChange={setShowCreateSpace}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>new space</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateSpace} className="flex flex-col gap-3">
+            <Input
+              autoFocus
+              value={newSpaceName}
+              onChange={e => setNewSpaceName(e.target.value)}
+              placeholder="space name"
+              required
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowCreateSpace(false)}>
+                cancel
+              </Button>
+              <Button type="submit">create</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

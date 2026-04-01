@@ -1,5 +1,38 @@
+/* ── Tailwind CSS v4 ─────────────────────────────────────────────────────── */
+@import "tailwindcss";
+
 /* ── Brand tokens ────────────────────────────────────────────────────────── */
 @import './brand.css';
+
+/* ── Tailwind theme — map Hum brand tokens ───────────────────────────────── */
+@theme inline {
+  --color-bg:           var(--hum-bg);
+  --color-surface:      var(--hum-surface);
+  --color-raised:       var(--hum-raised);
+  --color-border:       var(--hum-border);
+  --color-accent:       var(--hum-orange);
+  --color-accent-dim:   var(--hum-orange-dim);
+  --color-accent-glow:  var(--hum-orange-glow);
+  --color-text:         var(--hum-text);
+  --color-muted:        var(--hum-text-muted);
+  --color-error:        var(--hum-error);
+  --color-success:      var(--hum-success);
+
+  --font-sans:          var(--hum-font-sans);
+  --font-mono:          var(--hum-font-mono);
+
+  --radius-sm:          var(--hum-radius-sm);
+  --radius-md:          var(--hum-radius-md);
+  --radius-lg:          var(--hum-radius-lg);
+  --radius-xl:          var(--hum-radius-xl);
+
+  --spacing-1:          var(--hum-space-1);
+  --spacing-2:          var(--hum-space-2);
+  --spacing-3:          var(--hum-space-3);
+  --spacing-4:          var(--hum-space-4);
+  --spacing-5:          var(--hum-space-5);
+  --spacing-6:          var(--hum-space-6);
+}
 
 /* ── App-level aliases (mapped from brand tokens) ─────────────────────── */
 :root {
