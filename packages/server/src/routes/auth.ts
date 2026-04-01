@@ -19,15 +19,14 @@ router.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  const existing = queries.getUserByUsername.get(username);
+  const existing = await queries.getUserByUsername(username);
   if (existing) {
     res.status(409).json({ error: 'username already taken' });
     return;
   }
 
   const hash = await hashPassword(password);
-  const result = queries.createUser.run(username, hash);
-  const userId = Number(result.lastInsertRowid);
+  const { id: userId } = await queries.createUser(username, hash);
   const token = signToken({ userId, username });
   res.status(201).json({ token, user: { id: userId, username } });
 });
@@ -39,7 +38,7 @@ router.post('/login', async (req: Request, res: Response) => {
     return;
   }
 
-  const user = queries.getUserByUsername.get(username);
+  const user = await queries.getUserByUsername(username);
   if (!user) {
     res.status(401).json({ error: 'invalid credentials' });
     return;

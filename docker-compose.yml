@@ -6,11 +6,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      # Set DATABASE_URL to use PostgreSQL (omit to fall back to SQLite)
+      DATABASE_URL: ${DATABASE_URL:-}
       DB_PATH: /data/hum.db
       JWT_SECRET: ${JWT_SECRET}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost}
     volumes:
       - hum_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
@@ -30,5 +35,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hum}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hum}
+      POSTGRES_DB: ${POSTGRES_DB:-hum}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hum} -d ${POSTGRES_DB:-hum}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   hum_data:
+  postgres_data:

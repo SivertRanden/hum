@@ -7,8 +7,31 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build (${{ matrix.db }})
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - db: sqlite
+            database_url: ""
+          - db: postgresql
+            database_url: "postgres://hum:hum@localhost:5432/hum"
+
+    services:
+      postgres:
+        image: ${{ matrix.db == 'postgresql' && 'postgres:16-alpine' || '' }}
+        env:
+          POSTGRES_USER: hum
+          POSTGRES_PASSWORD: hum
+          POSTGRES_DB: hum
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +48,5 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          DATABASE_URL: ${{ matrix.database_url }}

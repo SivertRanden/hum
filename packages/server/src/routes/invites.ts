@@ -5,9 +5,9 @@ import { requireAuth, AuthRequest } from '../middleware.js';
 const router = Router();
 
 // POST /api/invite/:token/join — join a space via invite link (auth required)
-router.post('/:token/join', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/:token/join', requireAuth, async (req: AuthRequest, res: Response) => {
   const { token } = req.params;
-  const invite = queries.getInviteToken.get(token);
+  const invite = await queries.getInviteToken(token);
 
   if (!invite) { res.status(404).json({ error: 'invite not found' }); return; }
 
@@ -21,11 +21,11 @@ router.post('/:token/join', requireAuth, (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const space = queries.getSpaceById.get(invite.space_id);
+  const space = await queries.getSpaceById(invite.space_id);
   if (!space) { res.status(404).json({ error: 'space not found' }); return; }
 
-  queries.addSpaceMember.run(invite.space_id, req.user!.userId, 'member');
-  queries.incrementInviteUses.run(token);
+  await queries.addSpaceMember(invite.space_id, req.user!.userId, 'member');
+  await queries.incrementInviteUses(token);
 
   res.json({ space });
 });

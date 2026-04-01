@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import rateLimit from 'express-rate-limit';
+import { initDb } from './db.js';
 import authRouter from './routes/auth.js';
 import spacesRouter from './routes/spaces.js';
 import invitesRouter from './routes/invites.js';
@@ -49,6 +50,11 @@ app.use('/api/invite', apiLimiter, invitesRouter);
 const server = createServer(app);
 createWsServer(server);
 
-server.listen(PORT, () => {
-  console.log(`[hum] server listening on http://localhost:${PORT}`);
+initDb().then(() => {
+  server.listen(PORT, () => {
+    console.log(`[hum] server listening on http://localhost:${PORT}`);
+  });
+}).catch((err) => {
+  console.error('[hum] failed to initialize database:', err);
+  process.exit(1);
 });
