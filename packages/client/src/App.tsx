@@ -85,12 +85,55 @@ function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
 }
 
 // ── Message list ─────────────────────────────────────────────────────────────
-function MessageList({ messages, myUserId }: { messages: HumMessage[]; myUserId: number }) {
+interface MessageListProps {
+  messages: HumMessage[];
+  myUserId: number;
+  token: string;
+  activeSpaceId: number | null;
+  onEditMessage: (id: number, content: string) => void;
+  onDeleteMessage: (id: number) => void;
+}
+
+function MessageList({ messages, myUserId, token, activeSpaceId, onEditMessage, onDeleteMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const startEdit = (msg: HumMessage) => {
+    setEditingId(msg.id);
+    setEditContent(msg.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditContent('');
+  };
+
+  const submitEdit = async (msg: HumMessage) => {
+    if (!editContent.trim() || !activeSpaceId) return;
+    try {
+      await api.editMessage(token, activeSpaceId, msg.id, editContent.trim());
+      onEditMessage(msg.id, editContent.trim());
+    } catch (err) {
+      console.error('[edit]', err);
+    }
+    setEditingId(null);
+    setEditContent('');
+  };
+
+  const handleDelete = async (msg: HumMessage) => {
+    if (!activeSpaceId) return;
+    try {
+      await api.deleteMessage(token, activeSpaceId, msg.id);
+      onDeleteMessage(msg.id);
+    } catch (err) {
+      console.error('[delete]', err);
+    }
+  };
 
   if (messages.length === 0) {
     return <div className="empty-state">no messages yet. say something.</div>;
@@ -101,7 +144,35 @@ function MessageList({ messages, myUserId }: { messages: HumMessage[]; myUserId:
       {messages.map(m => (
         <div key={m.id} className={`message ${m.userId === myUserId ? 'mine' : ''}`}>
           <span className="msg-username">{m.username}</span>
-          <span className="msg-content">{m.content}</span>
+          {editingId === m.id ? (
+            <span className="msg-edit-form">
+              <input
+                className="msg-edit-input"
+                value={editContent}
+                onChange={e => setEditContent(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitEdit(m); }
+                  if (e.key === 'Escape') cancelEdit();
+                }}
+                autoFocus
+              />
+              <button className="msg-edit-save" onClick={() => void submitEdit(m)}>save</button>
+              <button className="msg-edit-cancel" onClick={cancelEdit}>cancel</button>
+            </span>
+          ) : (
+            <>
+              <span className="msg-content">
+                {m.content}
+                {m.editedAt && <span className="msg-edited"> (edited)</span>}
+              </span>
+              {m.userId === myUserId && (
+                <span className="msg-actions">
+                  <button className="msg-action-btn" onClick={() => startEdit(m)} title="Edit">✎</button>
+                  <button className="msg-action-btn msg-action-delete" onClick={() => void handleDelete(m)} title="Delete">✕</button>
+                </span>
+              )}
+            </>
+          )}
           <span className="msg-time">{new Date(m.createdAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       ))}
@@ -289,6 +360,22 @@ export default function App() {
     console.error('[ws]', err);
   }, []);
 
+  const onMessageEdit = useCallback((msg: HumMessage) => {
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: msg.content, editedAt: msg.editedAt } : m));
+  }, []);
+
+  const onMessageDelete = useCallback((messageId: number) => {
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+  }, []);
+
+  const handleEditMessage = useCallback((id: number, content: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content, editedAt: Math.floor(Date.now() / 1000) } : m));
+  }, []);
+
+  const handleDeleteMessage = useCallback((id: number) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  }, []);
+
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
 
   const { sendMessage, send } = useSocket(
@@ -300,6 +387,8 @@ export default function App() {
           onMessage,
           onHistory,
           onError,
+          onMessageEdit,
+          onMessageDelete,
           onVoiceEvent: (evt) => handleVoiceEvent(evt),
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
@@ -402,7 +491,14 @@ export default function App() {
               />
             ) : (
               <>
-                <MessageList messages={messages} myUserId={auth.userId} />
+                <MessageList
+                  messages={messages}
+                  myUserId={auth.userId}
+                  token={auth.token}
+                  activeSpaceId={activeSpaceId}
+                  onEditMessage={handleEditMessage}
+                  onDeleteMessage={handleDeleteMessage}
+                />
                 <form className="compose" onSubmit={handleSend}>
                   <Input
                     value={input}

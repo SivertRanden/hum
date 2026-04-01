@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
+import crypto from 'crypto';
 import { queries, Channel } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware.js';
+import { broadcast } from '../ws.js';
 
 const router = Router();
 
@@ -18,8 +20,9 @@ router.post('/', requireAuth, (req: AuthRequest, res: Response) => {
   try {
     const result = queries.createSpace.run(name.trim(), description?.trim() ?? null, req.user!.userId);
     const spaceId = Number(result.lastInsertRowid);
-    // Seed default channels for new space
+    // Seed default channel and add creator as owner
     queries.createChannel.run(spaceId, 'general', 'text', req.user!.userId);
+    queries.addSpaceMember.run(spaceId, req.user!.userId, 'owner');
     const space = queries.getSpaceById.get(spaceId);
     res.status(201).json(space);
   } catch (err: unknown) {
@@ -81,6 +84,88 @@ router.get('/:id/messages', requireAuth, (req: AuthRequest, res: Response) => {
   }
   const messages = queries.getMessages.all(spaceId, channel, limit);
   res.json(messages);
+});
+
+router.patch('/:id/messages/:messageId', requireAuth, (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+  const { content } = req.body as { content?: string };
+
+  if (!content?.trim()) { res.status(400).json({ error: 'content required' }); return; }
+
+  const space = queries.getSpaceById.get(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = queries.getMessageById.get(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+  if (message.user_id !== req.user!.userId) { res.status(403).json({ error: "cannot edit another user's message" }); return; }
+
+  const trimmed = content.trim();
+  const result = queries.updateMessage.run(trimmed, messageId, req.user!.userId);
+  if (result.changes === 0) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const updated = queries.getMessageById.get(messageId)!;
+  const editedAt = updated.updated_at ?? Math.floor(Date.now() / 1000);
+
+  broadcast(spaceId, message.channel, {
+    type: 'message:edit',
+    message: {
+      id: messageId,
+      spaceId,
+      channelId: message.channel,
+      userId: message.user_id,
+      username: message.username ?? '',
+      content: trimmed,
+      createdAt: message.created_at,
+      editedAt,
+    },
+  });
+
+  res.json({ id: messageId, content: trimmed, editedAt });
+});
+
+router.delete('/:id/messages/:messageId', requireAuth, (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+
+  const space = queries.getSpaceById.get(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = queries.getMessageById.get(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+  if (message.user_id !== req.user!.userId) { res.status(403).json({ error: "cannot delete another user's message" }); return; }
+
+  const result = queries.softDeleteMessage.run(messageId, req.user!.userId);
+  if (result.changes === 0) { res.status(404).json({ error: 'message not found' }); return; }
+
+  broadcast(spaceId, message.channel, {
+    type: 'message:delete',
+    messageId,
+  });
+
+  res.status(204).end();
+});
+
+// ── Members ──────────────────────────────────────────────────────────────────
+
+router.get('/:id/members', requireAuth, (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = queries.getSpaceById.get(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const members = queries.listSpaceMembers.all(spaceId);
+  res.json(members);
+});
+
+// ── Invites ───────────────────────────────────────────────────────────────────
+
+router.post('/:id/invites', requireAuth, (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = queries.getSpaceById.get(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const token = crypto.randomBytes(8).toString('hex');
+  const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 7 days
+  queries.createInviteToken.run(token, spaceId, req.user!.userId, expiresAt);
+  res.status(201).json({ token, expiresAt });
 });
 
 export default router;

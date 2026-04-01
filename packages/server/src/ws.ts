@@ -25,7 +25,7 @@ interface ClientMessage {
 }
 
 interface ServerMessage {
-  type: 'joined' | 'message' | 'error' | 'history'
+  type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left';
   spaceId?: number;
   channelId?: string;
@@ -37,8 +37,10 @@ interface ServerMessage {
     username: string;
     content: string;
     createdAt: number;
+    editedAt?: number;
   };
   messages?: ServerMessage['message'][];
+  messageId?: number;
   error?: string;
   // voice signaling fields
   peers?: Array<{ userId: number; username: string }>;
@@ -79,7 +81,7 @@ function isWsRateLimited(userId: number): boolean {
 
 const rooms = new Map<string, Set<HumSocket>>();
 
-function broadcast(spaceId: number, channelId: string, payload: ServerMessage, exclude?: HumSocket) {
+export function broadcast(spaceId: number, channelId: string, payload: ServerMessage, exclude?: HumSocket) {
   const room = rooms.get(roomKey(spaceId, channelId));
   if (!room) return;
   const data = JSON.stringify(payload);
@@ -194,6 +196,7 @@ export function createWsServer(server: import('http').Server) {
           username: m.username ?? '',
           content: m.content,
           createdAt: m.created_at,
+          editedAt: m.updated_at ?? undefined,
         }));
 
         socket.send(JSON.stringify({ type: 'history', messages: history } satisfies ServerMessage));
