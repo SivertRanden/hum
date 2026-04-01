@@ -10,16 +10,23 @@ interface HumSocket extends WebSocket {
   channelId?: string;
 }
 
+// ── Text chat types ───────────────────────────────────────────────────────────
+
 interface ClientMessage {
-  type: 'join' | 'message';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice';
   spaceId?: number;
   channelId?: string;
   content?: string;
   token?: string;
+  // voice signaling fields
+  targetUserId?: number;
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
 }
 
 interface ServerMessage {
-  type: 'joined' | 'message' | 'error' | 'history';
+  type: 'joined' | 'message' | 'error' | 'history'
+      | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left';
   spaceId?: number;
   channelId?: string;
   message?: {
@@ -33,12 +40,42 @@ interface ServerMessage {
   };
   messages?: ServerMessage['message'][];
   error?: string;
+  // voice signaling fields
+  peers?: Array<{ userId: number; username: string }>;
+  fromUserId?: number;
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+  userId?: number;
 }
 
-// Room key: "<spaceId>:<channelId>"
+// ── Room key ─────────────────────────────────────────────────────────────────
+
 function roomKey(spaceId: number, channelId: string): string {
   return `${spaceId}:${channelId}`;
 }
+
+// ── WebSocket message rate limiter ────────────────────────────────────────────
+// 20 messages per 10 seconds per user
+
+const WS_RATE_WINDOW_MS = 10_000;
+const WS_RATE_MAX = 20;
+
+interface RateEntry { count: number; windowStart: number }
+const wsRateLimits = new Map<number, RateEntry>();
+
+function isWsRateLimited(userId: number): boolean {
+  const now = Date.now();
+  const entry = wsRateLimits.get(userId);
+  if (!entry || now - entry.windowStart >= WS_RATE_WINDOW_MS) {
+    wsRateLimits.set(userId, { count: 1, windowStart: now });
+    return false;
+  }
+  if (entry.count >= WS_RATE_MAX) return true;
+  entry.count++;
+  return false;
+}
+
+// ── Text chat rooms ───────────────────────────────────────────────────────────
 
 const rooms = new Map<string, Set<HumSocket>>();
 
@@ -65,10 +102,53 @@ function joinRoom(socket: HumSocket, spaceId: number, channelId: string) {
   rooms.get(key)!.add(socket);
 }
 
+// ── Voice rooms ───────────────────────────────────────────────────────────────
+// voiceRooms: key = "<spaceId>:<channelId>", value = Map<userId, socket>
+
+const voiceRooms = new Map<string, Map<number, HumSocket>>();
+
+function voiceRoomParticipants(key: string): Array<{ userId: number; username: string }> {
+  const room = voiceRooms.get(key);
+  if (!room) return [];
+  return Array.from(room.entries()).map(([userId, s]) => ({ userId, username: s.username ?? '' }));
+}
+
+function broadcastVoicePresence(spaceId: number, channelId: string) {
+  const key = roomKey(spaceId, channelId);
+  const room = voiceRooms.get(key);
+  if (!room) return;
+  const peers = voiceRoomParticipants(key);
+  const data = JSON.stringify({ type: 'voice:presence', spaceId, channelId, peers } satisfies ServerMessage);
+  for (const s of room.values()) {
+    if (s.readyState === WebSocket.OPEN) s.send(data);
+  }
+}
+
+function leaveVoiceRoom(socket: HumSocket, spaceId: number, channelId: string) {
+  const key = roomKey(spaceId, channelId);
+  const room = voiceRooms.get(key);
+  if (!room || socket.userId === undefined) return;
+  room.delete(socket.userId);
+  if (room.size === 0) {
+    voiceRooms.delete(key);
+  }
+  // Notify remaining peers that this user left
+  const leaveMsg = JSON.stringify({ type: 'voice:peer_left', userId: socket.userId } satisfies ServerMessage);
+  for (const s of (voiceRooms.get(key)?.values() ?? [])) {
+    if (s.readyState === WebSocket.OPEN) s.send(leaveMsg);
+  }
+  broadcastVoicePresence(spaceId, channelId);
+}
+
+// ── WebSocket server ──────────────────────────────────────────────────────────
+
 export function createWsServer(server: import('http').Server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (socket: HumSocket, _req: IncomingMessage) => {
+    // Track which voice rooms this socket has joined (for cleanup on disconnect)
+    const activeVoiceRooms = new Set<string>(); // "<spaceId>:<channelId>"
+
     socket.on('message', (raw) => {
       let msg: ClientMessage;
       try {
@@ -78,8 +158,8 @@ export function createWsServer(server: import('http').Server) {
         return;
       }
 
+      // ── join (text channel) ───────────────────────────────────────────────
       if (msg.type === 'join') {
-        // Authenticate on first join
         if (!socket.userId) {
           if (!msg.token) {
             socket.send(JSON.stringify({ type: 'error', error: 'token required' } satisfies ServerMessage));
@@ -106,7 +186,6 @@ export function createWsServer(server: import('http').Server) {
 
         joinRoom(socket, spaceId, channelId);
 
-        // Send channel history
         const history = queries.getMessages.all(spaceId, channelId, 100).map((m) => ({
           id: m.id,
           spaceId: m.space_id,
@@ -122,9 +201,14 @@ export function createWsServer(server: import('http').Server) {
         return;
       }
 
+      // ── message (text chat) ───────────────────────────────────────────────
       if (msg.type === 'message') {
         if (!socket.userId || socket.spaceId === undefined || socket.channelId === undefined) {
           socket.send(JSON.stringify({ type: 'error', error: 'join a space first' } satisfies ServerMessage));
+          return;
+        }
+        if (isWsRateLimited(socket.userId)) {
+          socket.send(JSON.stringify({ type: 'error', error: 'rate limit exceeded — slow down' } satisfies ServerMessage));
           return;
         }
         const content = msg.content?.trim();
@@ -150,8 +234,86 @@ export function createWsServer(server: import('http').Server) {
           },
         };
 
-        // Broadcast to everyone in the channel room including sender
         broadcast(socket.spaceId, socket.channelId, outbound);
+        return;
+      }
+
+      // ── voice:join ────────────────────────────────────────────────────────
+      if (msg.type === 'voice:join') {
+        if (!socket.userId) {
+          socket.send(JSON.stringify({ type: 'error', error: 'not authenticated' } satisfies ServerMessage));
+          return;
+        }
+        const spaceId = Number(msg.spaceId);
+        const channelId = msg.channelId ?? '';
+        if (!channelId) {
+          socket.send(JSON.stringify({ type: 'error', error: 'channelId required' } satisfies ServerMessage));
+          return;
+        }
+
+        const key = roomKey(spaceId, channelId);
+        if (!voiceRooms.has(key)) voiceRooms.set(key, new Map());
+        const room = voiceRooms.get(key)!;
+
+        // Get existing peers before adding self
+        const existingPeers = voiceRoomParticipants(key);
+
+        // Add self
+        room.set(socket.userId, socket);
+        activeVoiceRooms.add(key);
+
+        // Send back list of existing peers so client knows who to call
+        socket.send(JSON.stringify({
+          type: 'voice:joined',
+          spaceId,
+          channelId,
+          peers: existingPeers,
+        } satisfies ServerMessage));
+
+        // Broadcast updated presence to all in room
+        broadcastVoicePresence(spaceId, channelId);
+        return;
+      }
+
+      // ── voice:leave ───────────────────────────────────────────────────────
+      if (msg.type === 'voice:leave') {
+        if (!socket.userId) return;
+        const spaceId = Number(msg.spaceId);
+        const channelId = msg.channelId ?? '';
+        const key = roomKey(spaceId, channelId);
+        activeVoiceRooms.delete(key);
+        leaveVoiceRoom(socket, spaceId, channelId);
+        return;
+      }
+
+      // ── voice signaling: offer / answer / ice ─────────────────────────────
+      if (msg.type === 'voice:offer' || msg.type === 'voice:answer' || msg.type === 'voice:ice') {
+        if (!socket.userId || msg.targetUserId === undefined) return;
+        const spaceId = Number(msg.spaceId);
+        const channelId = msg.channelId ?? '';
+        const key = roomKey(spaceId, channelId);
+        const targetSocket = voiceRooms.get(key)?.get(msg.targetUserId);
+        if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) return;
+
+        if (msg.type === 'voice:offer') {
+          targetSocket.send(JSON.stringify({
+            type: 'voice:offer',
+            fromUserId: socket.userId,
+            sdp: msg.sdp,
+          } satisfies ServerMessage));
+        } else if (msg.type === 'voice:answer') {
+          targetSocket.send(JSON.stringify({
+            type: 'voice:answer',
+            fromUserId: socket.userId,
+            sdp: msg.sdp,
+          } satisfies ServerMessage));
+        } else {
+          targetSocket.send(JSON.stringify({
+            type: 'voice:ice',
+            fromUserId: socket.userId,
+            candidate: msg.candidate,
+          } satisfies ServerMessage));
+        }
         return;
       }
 
@@ -159,8 +321,16 @@ export function createWsServer(server: import('http').Server) {
     });
 
     socket.on('close', () => {
+      // Clean up text chat room
       if (socket.spaceId !== undefined && socket.channelId !== undefined) {
         rooms.get(roomKey(socket.spaceId, socket.channelId))?.delete(socket);
+      }
+      // Clean up all voice rooms this socket was in
+      for (const key of activeVoiceRooms) {
+        const [spaceIdStr, ...rest] = key.split(':');
+        const channelId = rest.join(':');
+        const spaceId = Number(spaceIdStr);
+        leaveVoiceRoom(socket, spaceId, channelId);
       }
     });
   });
