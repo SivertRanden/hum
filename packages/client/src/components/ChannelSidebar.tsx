@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { type Space, type Channel, type SpaceMember } from '../api.js';
+import { type Space, type Channel, type SpaceMember, type DmChannel } from '../api.js';
 import { type VoicePeer } from '../useSocket.js';
 
 interface ChannelSidebarProps {
@@ -17,6 +17,8 @@ interface ChannelSidebarProps {
   onCreateInvite: () => Promise<string>;
   unreadCounts?: Map<string, number>;
   onMobileBack?: () => void;
+  dms?: DmChannel[];
+  onOpenDm?: (targetUserId: number) => Promise<void>;
 }
 
 function channelClientId(ch: Channel): string {
@@ -87,6 +89,8 @@ export function ChannelSidebar({
   onCreateInvite,
   unreadCounts = new Map(),
   onMobileBack,
+  dms = [],
+  onOpenDm,
 }: ChannelSidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -94,6 +98,7 @@ export function ChannelSidebar({
   const [creating, setCreating] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [showDmPicker, setShowDmPicker] = useState(false);
 
   const textChannels = channels.filter(ch => ch.type === 'text');
   const voiceChannels = channels.filter(ch => ch.type === 'voice');
@@ -237,6 +242,58 @@ export function ChannelSidebar({
             })}
           </ul>
         </div>
+
+        {server && (
+          <div className="channel-section">
+            <div className="channel-section-label">
+              Direct Messages
+              {onOpenDm && (
+                <button
+                  className="channel-add-btn"
+                  onClick={() => setShowDmPicker(s => !s)}
+                  title="Start new DM"
+                >
+                  <PlusIcon />
+                </button>
+              )}
+            </div>
+            {showDmPicker && (
+              <ul className="channel-list">
+                {members.filter(m => m.username !== username).map(m => (
+                  <li key={m.user_id}>
+                    <button
+                      className="channel-item"
+                      onClick={() => { void onOpenDm?.(m.user_id); setShowDmPicker(false); }}
+                    >
+                      <span className={m.is_online ? 'presence-dot online' : 'presence-dot offline'} style={{ marginRight: 4 }} />
+                      {m.username}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <ul className="channel-list">
+              {dms.map(dm => {
+                const clientId = `dm:${dm.id}`;
+                const displayName = dm.other_display_name ?? dm.other_username;
+                return (
+                  <li key={dm.id} className="channel-list-item">
+                    <button
+                      className={`channel-item${activeChannelId === clientId ? ' active' : ''}`}
+                      onClick={() => onSelectChannel(clientId)}
+                    >
+                      <span className={dm.is_online ? 'presence-dot online' : 'presence-dot offline'} style={{ marginRight: 4 }} />
+                      <span className="flex-1">{displayName}</span>
+                      {(unreadCounts.get(clientId) ?? 0) > 0 && (
+                        <span className="unread-dot" title={`${unreadCounts.get(clientId)} unread`} />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {server && members.length > 0 && (
           <div className="channel-section">

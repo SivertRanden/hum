@@ -58,9 +58,20 @@ export interface Channel {
   id: number;
   space_id: number;
   name: string;
-  type: 'text' | 'voice';
+  type: 'text' | 'voice' | 'dm';
   created_by: number;
   created_at: number;
+}
+
+export interface DmChannel {
+  id: number;
+  name: string;
+  space_id: number;
+  other_user_id: number;
+  other_username: string;
+  other_display_name: string | null;
+  other_avatar_url: string | null;
+  is_online?: boolean;
 }
 
 export interface UserProfile {
@@ -159,4 +170,10 @@ export const api = {
       body: JSON.stringify({ lastReadMessageId }),
     });
   },
+
+  listDms: (token: string, spaceId: number) =>
+    get<DmChannel[]>(`/spaces/${spaceId}/dms`, token),
+
+  openDm: (token: string, spaceId: number, targetUserId: number) =>
+    post<{ channelId: number }>(`/spaces/${spaceId}/dms`, { targetUserId }, token),
 };

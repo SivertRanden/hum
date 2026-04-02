@@ -189,6 +189,43 @@ router.post('/:id/channels/:channelName/read', requireAuth, async (req: AuthRequ
   res.status(204).end();
 });
 
+// ── Direct Messages ───────────────────────────────────────────────────────────
+
+router.get('/:id/dms', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const member = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!member) { res.status(403).json({ error: 'not a member' }); return; }
+  const onlineIds = getOnlineUserIds();
+  const dms = await queries.listDmChannels(spaceId, req.user!.userId);
+  res.json(dms.map(dm => ({ ...dm, is_online: onlineIds.has(dm.other_user_id) })));
+});
+
+router.post('/:id/dms', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const member = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!member) { res.status(403).json({ error: 'not a member' }); return; }
+
+  const { targetUserId } = req.body as { targetUserId?: number };
+  if (!targetUserId || isNaN(Number(targetUserId))) { res.status(400).json({ error: 'targetUserId required' }); return; }
+  const targetId = Number(targetUserId);
+  if (targetId === req.user!.userId) { res.status(400).json({ error: 'cannot DM yourself' }); return; }
+
+  const targetMember = await queries.getSpaceMember(spaceId, targetId);
+  if (!targetMember) { res.status(404).json({ error: 'target user is not a member of this space' }); return; }
+
+  const existing = await queries.findDmChannel(spaceId, req.user!.userId, targetId);
+  if (existing) {
+    res.json({ channelId: existing.id });
+    return;
+  }
+  const { id } = await queries.createDmChannel(spaceId, req.user!.userId, targetId, req.user!.userId);
+  res.status(201).json({ channelId: id });
+});
+
 // ── Invites ───────────────────────────────────────────────────────────────────
 
 router.post('/:id/invites', requireAuth, async (req: AuthRequest, res: Response) => {
