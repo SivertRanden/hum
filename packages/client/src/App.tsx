@@ -826,8 +826,12 @@ export default function App() {
   const [showEmojiManager, setShowEmojiManager] = useState(false);
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
+  const authRef = useRef(auth);
+  const membersRef = useRef(members);
   activeSpaceIdRef.current = activeSpaceId;
   activeChannelIdRef.current = activeChannelId;
+  authRef.current = auth;
+  membersRef.current = members;
 
   const handleAuth = useCallback((a: AuthState) => {
     localStorage.setItem('hum_auth', JSON.stringify(a));
@@ -1040,6 +1044,16 @@ export default function App() {
   }, []);
 
   const onPresenceUpdate = useCallback((update: PresenceUpdate) => {
+    // If the user isn't in our member list yet (e.g. they just joined the space),
+    // re-fetch the full member list so the DM picker shows them immediately.
+    if (!membersRef.current.some(m => m.user_id === update.userId)) {
+      const a = authRef.current;
+      const sid = activeSpaceIdRef.current;
+      if (a && sid) {
+        api.listMembers(a.token, sid).then(setMembers).catch(console.error);
+      }
+      return;
+    }
     setMembers(prev => prev.map(m =>
       m.user_id === update.userId
         ? { ...m, is_online: update.isOnline, last_seen_at: update.lastSeenAt }
