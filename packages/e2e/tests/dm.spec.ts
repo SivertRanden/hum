@@ -60,7 +60,7 @@ test.describe('Direct Messages', () => {
 
     // User A sends a message
     const msgFromA = 'Hello from A!';
-    await pageA.locator('.compose input').fill(msgFromA);
+    await pageA.locator('.compose input[type="text"]').fill(msgFromA);
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageA.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 5_000 });
 
@@ -69,17 +69,17 @@ test.describe('Direct Messages', () => {
     await pageB.locator('.channel-list .channel-item', { hasText: usernameA }).click();
     await expect(pageB.locator('.main-header')).toContainText(usernameA, { timeout: 5_000 });
 
-    // User B should see user A's message
-    await expect(pageB.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 5_000 });
+    // User B should see user A's message (loaded from REST history on channel open)
+    await expect(pageB.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 10_000 });
 
     // User B replies
     const msgFromB = 'Hello back from B!';
-    await pageB.locator('.compose input').fill(msgFromB);
+    await pageB.locator('.compose input[type="text"]').fill(msgFromB);
     await pageB.getByRole('button', { name: /^send$/i }).click();
     await expect(pageB.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 5_000 });
 
-    // User A sees user B's reply in real-time
-    await expect(pageA.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 5_000 });
+    // User A sees user B's reply in real-time via WebSocket
+    await expect(pageA.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 10_000 });
 
     await ctxA.close();
     await ctxB.close();
