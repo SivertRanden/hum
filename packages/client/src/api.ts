@@ -145,6 +145,8 @@ export interface ThreadData {
     username?: string;
   };
   replies: ThreadReplyData[];
+}
+
 export interface SpaceEmoji {
   id: number;
   space_id: number;
