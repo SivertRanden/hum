@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
+import { uniqueUser, register, createSpace } from './helpers';
 
 /**
  * Sets up two users in the same space:
@@ -16,13 +16,21 @@ async function setupTwoUsersInSpace(browser: any) {
   await createSpace(pageA, spaceName);
   await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-  const usernameB = uniqueUser('dmB');
-  const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
-  await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
+  // Copy invite link so user B can join
+  await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
+  const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
-  // Give the server a moment to broadcast user B's presence to user A,
-  // and for user A's client to re-fetch the member list.
-  await pageA.waitForTimeout(1_000);
+  const ctxB = await browser.newContext();
+  const pageB = await ctxB.newPage();
+  const usernameB = uniqueUser('dmB');
+  await pageB.goto('/');
+  await pageB.getByRole('button', { name: /no account\? register/i }).click();
+  await pageB.getByPlaceholder('username').fill(usernameB);
+  await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
+  await pageB.getByRole('button', { name: /create account/i }).click();
+  await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
+  await pageB.goto(inviteToken);
+  await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
 
   return { ctxA, pageA, usernameA, ctxB, pageB, usernameB };
 }
@@ -35,7 +43,7 @@ test.describe('Direct Messages', () => {
     await pageA.locator('.channel-add-btn[title="Start new DM"]').click();
 
     // User B should appear in the picker
-    await expect(pageA.locator('.channel-list .channel-item', { hasText: usernameB })).toBeVisible({ timeout: 5_000 });
+    await expect(pageA.locator('.channel-list .channel-item', { hasText: usernameB })).toBeVisible({ timeout: 3_000 });
 
     // Click on user B to open a DM
     await pageA.locator('.channel-list .channel-item', { hasText: usernameB }).click();
@@ -60,7 +68,7 @@ test.describe('Direct Messages', () => {
 
     // User A sends a message
     const msgFromA = 'Hello from A!';
-    await pageA.locator('.compose input[type="text"]').fill(msgFromA);
+    await pageA.locator('.compose input:not([type="file"])').fill(msgFromA);
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageA.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 5_000 });
 
@@ -69,17 +77,17 @@ test.describe('Direct Messages', () => {
     await pageB.locator('.channel-list .channel-item', { hasText: usernameA }).click();
     await expect(pageB.locator('.main-header')).toContainText(usernameA, { timeout: 5_000 });
 
-    // User B should see user A's message (loaded from REST history on channel open)
-    await expect(pageB.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 10_000 });
+    // User B should see user A's message
+    await expect(pageB.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 5_000 });
 
     // User B replies
     const msgFromB = 'Hello back from B!';
-    await pageB.locator('.compose input[type="text"]').fill(msgFromB);
+    await pageB.locator('.compose input:not([type="file"])').fill(msgFromB);
     await pageB.getByRole('button', { name: /^send$/i }).click();
     await expect(pageB.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 5_000 });
 
-    // User A sees user B's reply in real-time via WebSocket
-    await expect(pageA.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 10_000 });
+    // User A sees user B's reply in real-time
+    await expect(pageA.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 5_000 });
 
     await ctxA.close();
     await ctxB.close();

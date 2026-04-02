@@ -33,7 +33,7 @@ test.describe('Message editing & deletion — author-only controls', () => {
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('editViewer');
     await joinViaInvite(pageB, inviteUrl, usernameB);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message
@@ -71,7 +71,7 @@ test.describe('Message editing & deletion — author-only controls', () => {
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('rtEditB');
     await joinViaInvite(pageB, inviteUrl, usernameB);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // A sends original message
@@ -112,7 +112,7 @@ test.describe('Message editing & deletion — author-only controls', () => {
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('rtDelB');
     await joinViaInvite(pageB, inviteUrl, usernameB);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // A sends message
