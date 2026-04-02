@@ -92,6 +92,16 @@ export interface SpaceMember {
   last_seen_at?: number | null;
 }
 
+export interface SearchResult {
+  id: number;
+  space_id: number;
+  channel: string;
+  user_id: number;
+  username: string;
+  content: string;
+  created_at: number;
+}
+
 export const api = {
   register: (username: string, password: string, email?: string) =>
     post<AuthResponse>('/auth/register', { username, password, email }),
@@ -176,4 +186,10 @@ export const api = {
 
   openDm: (token: string, spaceId: number, targetUserId: number) =>
     post<{ channelId: number }>(`/spaces/${spaceId}/dms`, { targetUserId }, token),
+
+  searchMessages: (token: string, spaceId: number, q: string, channel?: string) =>
+    get<SearchResult[]>(
+      `/spaces/${spaceId}/search?q=${encodeURIComponent(q)}${channel ? `&channel=${encodeURIComponent(channel)}` : ''}`,
+      token,
+    ),
 };
