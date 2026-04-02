@@ -85,6 +85,14 @@ export const last_read = pgTable('last_read', {
   uniqueIndex('last_read_user_space_channel_unique').on(table.user_id, table.space_id, table.channel),
 ]);
 
+export const dm_members = pgTable('dm_members', {
+  id: serial('id').primaryKey(),
+  channel_id: integer('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+}, (table) => [
+  uniqueIndex('dm_members_channel_user_unique').on(table.channel_id, table.user_id),
+]);
+
 export const message_reactions = pgTable('message_reactions', {
   id: serial('id').primaryKey(),
   message_id: integer('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),

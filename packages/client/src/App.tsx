@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember } from './api.js';
+import { api, Space, Channel, SpaceMember, DmChannel } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent } from './useSocket.js';
 import { useLiveKitVoice } from './useLiveKitVoice.js';
 
@@ -26,6 +26,10 @@ const DEFAULT_CHANNEL = 'general';
 
 function isVoiceChannel(id: string) {
   return id.startsWith('voice:');
+}
+
+function isDmChannel(id: string) {
+  return id.startsWith('dm:');
 }
 
 function voiceRoomName(id: string) {
@@ -481,6 +485,7 @@ export default function App() {
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
   const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
+  const [dms, setDms] = useState<DmChannel[]>([]);
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
   activeSpaceIdRef.current = activeSpaceId;
@@ -526,6 +531,11 @@ export default function App() {
     }).catch(console.error);
   }, [auth, activeSpaceId]);
 
+  useEffect(() => {
+    if (!auth || !activeSpaceId) { setDms([]); return; }
+    api.listDms(auth.token, activeSpaceId).then(setDms).catch(console.error);
+  }, [auth, activeSpaceId]);
+
   // Auto-join via invite token in URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -548,6 +558,16 @@ export default function App() {
     setMessages([]);
     setMobileView('channels');
     setReactions({});
+    setDms([]);
+  };
+
+  const handleOpenDm = async (targetUserId: number) => {
+    if (!auth || !activeSpaceId) return;
+    const { channelId } = await api.openDm(auth.token, activeSpaceId, targetUserId);
+    // Refresh DM list
+    const updatedDms = await api.listDms(auth.token, activeSpaceId);
+    setDms(updatedDms);
+    handleSelectChannel(`dm:${channelId}`);
   };
 
   const handleCreateChannel = async (name: string, type: 'text' | 'voice') => {
@@ -704,6 +724,9 @@ export default function App() {
   }, [activeChannelId, activeSpaceId]);
 
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
+  const activeDm = isDmChannel(activeChannelId)
+    ? dms.find(d => `dm:${d.id}` === activeChannelId)
+    : null;
 
   const { sendMessage, sendTypingStart, sendTypingStop, send, toggleReaction } = useSocket(
     auth
@@ -814,6 +837,7 @@ export default function App() {
 
   const activeSpace = spaces.find(s => s.id === activeSpaceId) ?? null;
   const inVoice = isVoiceChannel(activeChannelId);
+  const inDm = isDmChannel(activeChannelId);
 
   return (
     <div className="app-shell" data-mobile-view={mobileView}>
@@ -842,6 +866,8 @@ export default function App() {
         onCreateInvite={handleCreateInvite}
         unreadCounts={unreadCounts}
         onMobileBack={() => setMobileView('servers')}
+        dms={dms}
+        onOpenDm={handleOpenDm}
       />
 
       {/* Column 3: main content */}
@@ -855,10 +881,12 @@ export default function App() {
               <span className="main-header-icon" aria-hidden>
                 {inVoice
                   ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                  : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 3L9 3.41 6.41 16H3v2h3l-.59 2.59.97.41H8l.59-2.59.97.41H11L10.41 16H14l.59 2.59.97.41H17l.59-2.59.97.41H20v-2h-2l2.59-13H19l-2.59 13H13l2.59-13H14l-2.59 13H8l2.59-13z"/></svg>
+                  : inDm
+                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                    : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 3L9 3.41 6.41 16H3v2h3l-.59 2.59.97.41H8l.59-2.59.97.41H11L10.41 16H14l.59 2.59.97.41H17l.59-2.59.97.41H20v-2h-2l2.59-13H19l-2.59 13H13l2.59-13H14l-2.59 13H8l2.59-13z"/></svg>
                 }
               </span>
-              <span>{inVoice ? voiceRoomName(activeChannelId) : activeChannelId}</span>
+              <span>{inVoice ? voiceRoomName(activeChannelId) : inDm ? (activeDm?.other_display_name ?? activeDm?.other_username ?? activeChannelId) : activeChannelId}</span>
             </header>
 
             {inVoice ? (
@@ -895,7 +923,7 @@ export default function App() {
                   <Input
                     value={input}
                     onChange={handleInputChange}
-                    placeholder={`Message #${activeChannelId}…`}
+                    placeholder={inDm ? `Message ${activeDm?.other_display_name ?? activeDm?.other_username ?? '…'}` : `Message #${activeChannelId}…`}
                     autoFocus
                     className="flex-1"
                   />

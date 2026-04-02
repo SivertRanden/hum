@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
 import { migrate as migrateSqlite } from 'drizzle-orm/better-sqlite3/migrator';
-import { eq, and, isNull, asc, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, asc, sql, inArray, ne } from 'drizzle-orm';
 import * as sqliteSchema from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -97,6 +97,17 @@ export interface MessageReaction {
   username?: string;
 }
 
+export interface DmChannel {
+  id: number;
+  name: string;
+  space_id: number;
+  other_user_id: number;
+  other_username: string;
+  other_display_name: string | null;
+  other_avatar_url: string | null;
+  is_online?: boolean;
+}
+
 // ── Unified async Queries interface ───────────────────────────────────────────
 
 export interface Queries {
@@ -144,6 +155,11 @@ export interface Queries {
   getReactionsForMessages(message_ids: number[]): Promise<Record<number, MessageReaction[]>>;
 
   updateUserProfile(user_id: number, display_name: string | null, avatar_url?: string | null): Promise<void>;
+
+  createDmChannel(space_id: number, user1_id: number, user2_id: number, created_by: number): Promise<{ id: number }>;
+  findDmChannel(space_id: number, user1_id: number, user2_id: number): Promise<{ id: number } | undefined>;
+  listDmChannels(space_id: number, user_id: number): Promise<DmChannel[]>;
+  isUserDmMember(channel_id: number, user_id: number): Promise<boolean>;
 }
 
 // ── SQLite driver ─────────────────────────────────────────────────────────────
@@ -411,6 +427,59 @@ function buildSqliteQueries(): Queries {
       const upd: Partial<{ display_name: string | null; avatar_url: string | null }> = { display_name };
       if (avatar_url !== undefined) upd.avatar_url = avatar_url;
       db.update(users).set(upd).where(eq(users.id, user_id)).run();
+    },
+
+    createDmChannel: async (space_id, user1_id, user2_id, created_by) => {
+      const { dm_members } = sqliteSchema;
+      const name = `dm_${Math.min(user1_id, user2_id)}_${Math.max(user1_id, user2_id)}`;
+      const row = db.insert(channels).values({ space_id, name, type: 'dm', created_by }).returning({ id: channels.id }).get()!;
+      db.insert(dm_members).values({ channel_id: row.id, user_id: user1_id }).run();
+      db.insert(dm_members).values({ channel_id: row.id, user_id: user2_id }).run();
+      return { id: row.id };
+    },
+
+    findDmChannel: async (space_id, user1_id, user2_id) => {
+      const name = `dm_${Math.min(user1_id, user2_id)}_${Math.max(user1_id, user2_id)}`;
+      const row = db.select({ id: channels.id })
+        .from(channels)
+        .where(and(eq(channels.space_id, space_id), eq(channels.name, name), eq(channels.type, 'dm')))
+        .get();
+      return row as { id: number } | undefined;
+    },
+
+    listDmChannels: async (space_id, user_id) => {
+      const { dm_members } = sqliteSchema;
+      const myChannels = db.select({ channel_id: dm_members.channel_id })
+        .from(dm_members)
+        .innerJoin(channels, eq(dm_members.channel_id, channels.id))
+        .where(and(eq(dm_members.user_id, user_id), eq(channels.space_id, space_id), eq(channels.type, 'dm')))
+        .all();
+      return myChannels.map(({ channel_id }) => {
+        const otherMember = db.select({ user_id: dm_members.user_id, username: users.username, display_name: users.display_name, avatar_url: users.avatar_url })
+          .from(dm_members)
+          .innerJoin(users, eq(dm_members.user_id, users.id))
+          .where(and(eq(dm_members.channel_id, channel_id), ne(dm_members.user_id, user_id)))
+          .get();
+        const chan = db.select({ id: channels.id, name: channels.name, space_id: channels.space_id })
+          .from(channels).where(eq(channels.id, channel_id)).get()!;
+        return {
+          id: chan.id,
+          name: chan.name,
+          space_id: chan.space_id,
+          other_user_id: otherMember?.user_id ?? 0,
+          other_username: otherMember?.username ?? '',
+          other_display_name: otherMember?.display_name ?? null,
+          other_avatar_url: otherMember?.avatar_url ?? null,
+        } as DmChannel;
+      });
+    },
+
+    isUserDmMember: async (channel_id, user_id) => {
+      const { dm_members } = sqliteSchema;
+      const row = db.select({ id: dm_members.id }).from(dm_members)
+        .where(and(eq(dm_members.channel_id, channel_id), eq(dm_members.user_id, user_id)))
+        .get();
+      return !!row;
     },
 
   };
@@ -683,6 +752,63 @@ async function buildPgQueries(): Promise<Queries> {
         result[row.message_id].push(row);
       }
       return result;
+    },
+
+    createDmChannel: async (space_id, user1_id, user2_id, created_by) => {
+      const { dm_members } = pgSchema;
+      const name = `dm_${Math.min(user1_id, user2_id)}_${Math.max(user1_id, user2_id)}`;
+      const rows = await db.insert(channels).values({ space_id, name, type: 'dm', created_by }).returning({ id: channels.id });
+      const channelId = rows[0].id;
+      await db.insert(dm_members).values({ channel_id: channelId, user_id: user1_id });
+      await db.insert(dm_members).values({ channel_id: channelId, user_id: user2_id });
+      return { id: channelId };
+    },
+
+    findDmChannel: async (space_id, user1_id, user2_id) => {
+      const name = `dm_${Math.min(user1_id, user2_id)}_${Math.max(user1_id, user2_id)}`;
+      const rows = await db.select({ id: channels.id })
+        .from(channels)
+        .where(and(eq(channels.space_id, space_id), eq(channels.name, name), eq(channels.type, 'dm')))
+        .limit(1);
+      return rows[0] as { id: number } | undefined;
+    },
+
+    listDmChannels: async (space_id, user_id) => {
+      const { dm_members } = pgSchema;
+      const myChannels = await db.select({ channel_id: dm_members.channel_id })
+        .from(dm_members)
+        .innerJoin(channels, eq(dm_members.channel_id, channels.id))
+        .where(and(eq(dm_members.user_id, user_id), eq(channels.space_id, space_id), eq(channels.type, 'dm')));
+      const result: DmChannel[] = [];
+      for (const { channel_id } of myChannels) {
+        const otherRows = await db.select({ user_id: dm_members.user_id, username: users.username, display_name: users.display_name, avatar_url: users.avatar_url })
+          .from(dm_members)
+          .innerJoin(users, eq(dm_members.user_id, users.id))
+          .where(and(eq(dm_members.channel_id, channel_id), ne(dm_members.user_id, user_id)))
+          .limit(1);
+        const chanRows = await db.select({ id: channels.id, name: channels.name, space_id: channels.space_id })
+          .from(channels).where(eq(channels.id, channel_id)).limit(1);
+        if (chanRows[0]) {
+          result.push({
+            id: chanRows[0].id,
+            name: chanRows[0].name,
+            space_id: chanRows[0].space_id,
+            other_user_id: otherRows[0]?.user_id ?? 0,
+            other_username: otherRows[0]?.username ?? '',
+            other_display_name: otherRows[0]?.display_name ?? null,
+            other_avatar_url: otherRows[0]?.avatar_url ?? null,
+          });
+        }
+      }
+      return result;
+    },
+
+    isUserDmMember: async (channel_id, user_id) => {
+      const { dm_members } = pgSchema;
+      const rows = await db.select({ id: dm_members.id }).from(dm_members)
+        .where(and(eq(dm_members.channel_id, channel_id), eq(dm_members.user_id, user_id)))
+        .limit(1);
+      return rows.length > 0;
     },
 
   };

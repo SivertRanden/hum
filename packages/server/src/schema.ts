@@ -85,6 +85,14 @@ export const last_read = sqliteTable('last_read', {
   uniqueIndex('last_read_user_space_channel_unique').on(table.user_id, table.space_id, table.channel),
 ]);
 
+export const dm_members = sqliteTable('dm_members', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  channel_id: integer('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+}, (table) => [
+  uniqueIndex('dm_members_channel_user_unique').on(table.channel_id, table.user_id),
+]);
+
 export const message_reactions = sqliteTable('message_reactions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   message_id: integer('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),

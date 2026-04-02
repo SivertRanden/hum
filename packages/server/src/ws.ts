@@ -254,6 +254,16 @@ export function createWsServer(server: import('http').Server) {
           return;
         }
 
+        // For DM channels, verify the user is a member of that DM
+        if (channelId.startsWith('dm:')) {
+          const dmChannelId = Number(channelId.slice(3));
+          const isMember = await queries.isUserDmMember(dmChannelId, socket.userId);
+          if (!isMember) {
+            socket.send(JSON.stringify({ type: 'error', error: 'not a member of this DM' } satisfies ServerMessage));
+            return;
+          }
+        }
+
         // Track presence: register user connection before joining room
         const wasOffline = !connectedUsers.has(socket.userId);
         if (!connectedUsers.has(socket.userId)) connectedUsers.set(socket.userId, new Set());

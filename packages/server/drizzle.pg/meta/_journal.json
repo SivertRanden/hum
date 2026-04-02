@@ -36,6 +36,13 @@
       "when": 1775110000000,
       "tag": "0004_add_message_reactions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775115000000,
+      "tag": "0005_add_dm_channels",
+      "breakpoints": true
     }
   ]
 }
