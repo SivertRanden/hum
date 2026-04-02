@@ -37,7 +37,7 @@ test.describe('Messages', () => {
     await expect(page.locator('.msg-content', { hasText: original })).toBeVisible({ timeout: 5_000 });
 
     // Click edit button (✎)
-    await page.locator('.msg-action-btn').first().click();
+    await page.locator('[title="Edit"]').first().click();
 
     await page.locator('.msg-edit-input').clear();
     await page.locator('.msg-edit-input').fill(updated);
@@ -58,7 +58,7 @@ test.describe('Messages', () => {
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: original })).toBeVisible({ timeout: 5_000 });
 
-    await page.locator('.msg-action-btn').first().click();
+    await page.locator('[title="Edit"]').first().click();
     await page.locator('.msg-edit-input').fill('Should not be saved');
     await page.locator('.msg-edit-cancel').click();
 
