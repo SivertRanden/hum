@@ -19,6 +19,8 @@ export interface User {
   id: number;
   username: string;
   password_hash: string;
+  display_name: string | null;
+  avatar_url: string | null;
   created_at: number;
   last_seen_at: number | null;
 }
@@ -50,6 +52,8 @@ export interface Message {
   updated_at: number | null;
   deleted_at: number | null;
   username?: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface SpaceMember {
@@ -95,11 +99,13 @@ export interface Queries {
   updateMessage(content: string, id: number, user_id: number): Promise<boolean>;
   softDeleteMessage(id: number, user_id: number): Promise<boolean>;
 
-  listSpaceMembers(space_id: number): Promise<(SpaceMember & { username: string; last_seen_at: number | null })[]>;
+  listSpaceMembers(space_id: number): Promise<(SpaceMember & { username: string; display_name: string | null; avatar_url: string | null; last_seen_at: number | null })[]>;
   addSpaceMember(space_id: number, user_id: number, role: string): Promise<void>;
   getSpaceMember(space_id: number, user_id: number): Promise<SpaceMember | undefined>;
 
   updateLastSeen(user_id: number): Promise<void>;
+  updateUserProfile(user_id: number, display_name: string | null): Promise<void>;
+  updateUserAvatar(user_id: number, avatar_url: string | null): Promise<void>;
 
   createInviteToken(token: string, space_id: number, created_by: number, expires_at: number | null): Promise<void>;
   getInviteToken(token: string): Promise<InviteToken | undefined>;
@@ -107,6 +113,10 @@ export interface Queries {
 
   markChannelRead(user_id: number, space_id: number, channel: string, last_read_message_id: number): Promise<void>;
   getUnreadCounts(user_id: number, space_id: number): Promise<{ channel: string; count: number }[]>;
+
+  addReaction(message_id: number, user_id: number, emoji: string): Promise<void>;
+  removeReaction(message_id: number, user_id: number, emoji: string): Promise<void>;
+  getReactionsForMessages(message_ids: number[]): Promise<Record<number, Array<{ emoji: string; user_id: number; username: string }>>>;
 }
 
 // ── SQLite driver ─────────────────────────────────────────────────────────────
@@ -129,6 +139,8 @@ function buildSqliteQueries(): Queries {
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN updated_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN deleted_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN last_seen_at INTEGER'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE users ADD COLUMN display_name TEXT'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT'); } catch { /* already exists */ }
 
   // Data migrations: seed defaults for existing rows
   rawDb.exec(`
@@ -199,6 +211,8 @@ function buildSqliteQueries(): Queries {
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -227,6 +241,8 @@ function buildSqliteQueries(): Queries {
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -257,13 +273,15 @@ function buildSqliteQueries(): Queries {
         role: space_members.role,
         joined_at: space_members.joined_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
         last_seen_at: users.last_seen_at,
       })
         .from(space_members)
         .innerJoin(users, eq(space_members.user_id, users.id))
         .where(eq(space_members.space_id, space_id))
         .orderBy(asc(space_members.joined_at))
-        .all() as (SpaceMember & { username: string; last_seen_at: number | null })[],
+        .all() as (SpaceMember & { username: string; display_name: string | null; avatar_url: string | null; last_seen_at: number | null })[],
 
     addSpaceMember: async (space_id, user_id, role) => {
       db.insert(space_members).values({ space_id, user_id, role }).onConflictDoNothing().run();
@@ -276,6 +294,14 @@ function buildSqliteQueries(): Queries {
 
     updateLastSeen: async (user_id) => {
       db.update(users).set({ last_seen_at: nowEpoch }).where(eq(users.id, user_id)).run();
+    },
+
+    updateUserProfile: async (user_id, display_name) => {
+      db.update(users).set({ display_name }).where(eq(users.id, user_id)).run();
+    },
+
+    updateUserAvatar: async (user_id, avatar_url) => {
+      db.update(users).set({ avatar_url }).where(eq(users.id, user_id)).run();
     },
 
     createInviteToken: async (token, space_id, created_by, expires_at) => {
@@ -308,6 +334,31 @@ function buildSqliteQueries(): Queries {
         .leftJoin(last_read, and(eq(last_read.user_id, user_id), eq(last_read.space_id, space_id), eq(last_read.channel, messages.channel)))
         .where(and(eq(messages.space_id, space_id), isNull(messages.deleted_at), sql`${messages.id} > COALESCE(${last_read.last_read_message_id}, 0)`))
         .groupBy(messages.channel).all() as { channel: string; count: number }[];
+    },
+
+    addReaction: async (message_id, user_id, emoji) => {
+      rawDb.prepare('INSERT OR IGNORE INTO message_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)').run(message_id, user_id, emoji);
+    },
+
+    removeReaction: async (message_id, user_id, emoji) => {
+      rawDb.prepare('DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?').run(message_id, user_id, emoji);
+    },
+
+    getReactionsForMessages: async (message_ids) => {
+      if (message_ids.length === 0) return {};
+      const placeholders = message_ids.map(() => '?').join(',');
+      const rows = rawDb.prepare(`
+        SELECT mr.message_id, mr.user_id, mr.emoji, u.username
+        FROM message_reactions mr
+        JOIN users u ON u.id = mr.user_id
+        WHERE mr.message_id IN (${placeholders})
+      `).all(...message_ids) as Array<{ message_id: number; user_id: number; emoji: string; username: string }>;
+      const result: Record<number, Array<{ emoji: string; user_id: number; username: string }>> = {};
+      for (const r of rows) {
+        if (!result[r.message_id]) result[r.message_id] = [];
+        result[r.message_id].push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
+      }
+      return result;
     },
 
   };
@@ -402,6 +453,8 @@ async function buildPgQueries(): Promise<Queries> {
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -430,6 +483,8 @@ async function buildPgQueries(): Promise<Queries> {
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -462,12 +517,14 @@ async function buildPgQueries(): Promise<Queries> {
         role: space_members.role,
         joined_at: space_members.joined_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
         last_seen_at: users.last_seen_at,
       })
         .from(space_members)
         .innerJoin(users, eq(space_members.user_id, users.id))
         .where(eq(space_members.space_id, space_id))
-        .orderBy(asc(space_members.joined_at)) as Promise<(SpaceMember & { username: string; last_seen_at: number | null })[]>;
+        .orderBy(asc(space_members.joined_at)) as Promise<(SpaceMember & { username: string; display_name: string | null; avatar_url: string | null; last_seen_at: number | null })[]>;
     },
 
     addSpaceMember: async (space_id, user_id, role) => {
@@ -483,6 +540,14 @@ async function buildPgQueries(): Promise<Queries> {
 
     updateLastSeen: async (user_id) => {
       await db.update(users).set({ last_seen_at: nowEpoch }).where(eq(users.id, user_id));
+    },
+
+    updateUserProfile: async (user_id, display_name) => {
+      await db.update(users).set({ display_name }).where(eq(users.id, user_id));
+    },
+
+    updateUserAvatar: async (user_id, avatar_url) => {
+      await db.update(users).set({ avatar_url }).where(eq(users.id, user_id));
     },
 
     createInviteToken: async (token, space_id, created_by, expires_at) => {
@@ -517,6 +582,29 @@ async function buildPgQueries(): Promise<Queries> {
         .where(and(eq(messages.space_id, space_id), isNull(messages.deleted_at), sql`${messages.id} > COALESCE(${last_read.last_read_message_id}, 0)`))
         .groupBy(messages.channel);
       return rows as { channel: string; count: number }[];
+    },
+
+    addReaction: async (message_id, user_id, emoji) => {
+      await db.execute(sql`INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (${message_id}, ${user_id}, ${emoji}) ON CONFLICT DO NOTHING`);
+    },
+
+    removeReaction: async (message_id, user_id, emoji) => {
+      await db.execute(sql`DELETE FROM message_reactions WHERE message_id = ${message_id} AND user_id = ${user_id} AND emoji = ${emoji}`);
+    },
+
+    getReactionsForMessages: async (message_ids) => {
+      if (message_ids.length === 0) return {};
+      const rows = await db.execute<{ message_id: number; user_id: number; emoji: string; username: string }>(
+        sql`SELECT mr.message_id, mr.user_id, mr.emoji, u.username
+            FROM message_reactions mr JOIN users u ON u.id = mr.user_id
+            WHERE mr.message_id = ANY(${message_ids})`
+      );
+      const result: Record<number, Array<{ emoji: string; user_id: number; username: string }>> = {};
+      for (const r of rows) {
+        if (!result[r.message_id]) result[r.message_id] = [];
+        result[r.message_id].push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
+      }
+      return result;
     },
 
   };

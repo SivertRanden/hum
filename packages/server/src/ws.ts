@@ -13,17 +13,19 @@ interface HumSocket extends WebSocket {
 // ── Text chat types ───────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'typing_start' | 'typing_stop';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'typing_start' | 'typing_stop' | 'reaction:toggle';
   spaceId?: number;
   channelId?: string;
   content?: string;
   token?: string;
+  messageId?: number;
+  emoji?: string;
 }
 
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:peer_left'
-      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message';
+      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction';
   spaceId?: number;
   channelId?: string;
   // typing indicator fields
@@ -48,6 +50,7 @@ interface ServerMessage {
   // presence fields
   isOnline?: boolean;
   lastSeenAt?: number;
+  reaction?: { messageId: number; emoji: string; userId: number; username: string; action: 'add' | 'remove' };
 }
 
 // ── Room key ─────────────────────────────────────────────────────────────────
@@ -261,7 +264,9 @@ export function createWsServer(server: import('http').Server) {
           }, socket);
         }
 
-        const history = (await queries.getMessages(spaceId, channelId, 100)).map((m) => ({
+        const rawHistory = await queries.getMessages(spaceId, channelId, 100);
+
+        const history = rawHistory.map((m) => ({
           id: m.id,
           spaceId: m.space_id,
           channelId: m.channel,

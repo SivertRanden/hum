@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent } from './useSocket.js';
 import { useLiveKitVoice } from './useLiveKitVoice.js';
 
 import {
@@ -99,6 +99,57 @@ function renderMessageContent(content: string, myUsername: string): React.ReactN
     }
     return part;
   });
+}
+
+// ── Reaction pills ───────────────────────────────────────────────────────────
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+function ReactionPills({ reactions, myUserId, messageId, onToggle }: {
+  reactions: ReactionGroup[];
+  myUserId: number;
+  messageId: number;
+  onToggle: (messageId: number, emoji: string) => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  if (reactions.length === 0 && !showPicker) {
+    return (
+      <span className="msg-reactions">
+        <button className="reaction-add-btn" title="Add reaction" onClick={() => setShowPicker(true)}>+</button>
+        {showPicker && (
+          <span className="reaction-picker">
+            {QUICK_EMOJIS.map(e => (
+              <button key={e} className="reaction-quick-btn" onClick={() => { onToggle(messageId, e); setShowPicker(false); }}>{e}</button>
+            ))}
+          </span>
+        )}
+      </span>
+    );
+  }
+  return (
+    <span className="msg-reactions">
+      {reactions.map(r => {
+        const mine = r.userIds.includes(myUserId);
+        return (
+          <button
+            key={r.emoji}
+            className={`reaction-pill${mine ? ' mine' : ''}`}
+            onClick={() => onToggle(messageId, r.emoji)}
+            title={r.usernames.join(', ')}
+          >
+            {r.emoji} {r.userIds.length}
+          </button>
+        );
+      })}
+      <button className="reaction-add-btn" title="Add reaction" onClick={() => setShowPicker(prev => !prev)}>+</button>
+      {showPicker && (
+        <span className="reaction-picker">
+          {QUICK_EMOJIS.map(e => (
+            <button key={e} className="reaction-quick-btn" onClick={() => { onToggle(messageId, e); setShowPicker(false); }}>{e}</button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
 }
 
 // ── Message list ─────────────────────────────────────────────────────────────

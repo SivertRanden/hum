@@ -15,6 +15,20 @@
       "when": 1775076700000,
       "tag": "0001_add_last_read",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1743660000000,
+      "tag": "0002_add_user_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1743661000000,
+      "tag": "0003_add_message_reactions",
+      "breakpoints": true
     }
   ]
 }
