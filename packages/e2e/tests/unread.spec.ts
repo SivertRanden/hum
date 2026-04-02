@@ -16,8 +16,10 @@ async function joinViaInvite(
   pageGuest: import('@playwright/test').Page,
   guestUsername: string,
 ) {
-  // Host copies the invite link
+  // Host copies the invite link; wait for 'Copied!' to confirm the async
+  // clipboard write completed before reading (avoids a stale-clipboard race).
   await pageHost.locator('.channel-add-btn[title="Copy invite link"]').click();
+  await expect(pageHost.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
   const inviteUrl = await pageHost.evaluate(() => navigator.clipboard.readText());
 
   // Guest registers and joins

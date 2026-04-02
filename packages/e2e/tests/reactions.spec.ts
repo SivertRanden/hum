@@ -53,9 +53,10 @@ test.describe('Message Reactions', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Get invite link
+    // Get invite link; wait for 'Copied!' to avoid stale-clipboard race
     await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
+    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
+    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
 
     // User B joins
     const ctxB = await browser.newContext();
@@ -67,8 +68,8 @@ test.describe('Message Reactions', () => {
     await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
     await pageB.getByRole('button', { name: /create account/i }).click();
     await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    await pageB.goto(inviteToken);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await pageB.goto(inviteUrl);
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message

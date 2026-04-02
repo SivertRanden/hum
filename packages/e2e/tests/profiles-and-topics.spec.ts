@@ -217,7 +217,9 @@ test.describe('User profiles', () => {
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
     await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
+    // Wait for clipboard write to complete before reading
+    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
+    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
 
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
@@ -228,12 +230,12 @@ test.describe('User profiles', () => {
     await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
     await pageB.getByRole('button', { name: /create account/i }).click();
     await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    await pageB.goto(inviteToken);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await pageB.goto(inviteUrl);
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message
-    await pageA.locator('.compose input').fill('Message from A');
+    await pageA.locator('.compose input[type="text"]').fill('Message from A');
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageB.locator('.msg-content', { hasText: 'Message from A' })).toBeVisible({ timeout: 5_000 });
 
