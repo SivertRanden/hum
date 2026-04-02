@@ -10,7 +10,7 @@ test.describe('Messages', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     const msg = 'Hello, Hum!';
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose input[type="text"]').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
 
     await expect(page.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
@@ -32,7 +32,7 @@ test.describe('Messages', () => {
 
     const original = 'Original text';
     const updated = 'Updated text';
-    await page.locator('.compose input').fill(original);
+    await page.locator('.compose input[type="text"]').fill(original);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: original })).toBeVisible({ timeout: 5_000 });
 
@@ -54,7 +54,7 @@ test.describe('Messages', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     const original = 'Cancel edit test';
-    await page.locator('.compose input').fill(original);
+    await page.locator('.compose input[type="text"]').fill(original);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: original })).toBeVisible({ timeout: 5_000 });
 
@@ -72,7 +72,7 @@ test.describe('Messages', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     const msg = 'Message to delete';
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose input[type="text"]').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
 
@@ -88,7 +88,7 @@ test.describe('Messages', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     const msg = 'Persistent message';
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose input[type="text"]').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
 
