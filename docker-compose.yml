@@ -12,6 +12,9 @@ services:
       DB_PATH: /data/hum.db
       JWT_SECRET: ${JWT_SECRET}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost}
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret0123456789abcdef}
     volumes:
       - hum_data:/data
     depends_on:
@@ -50,6 +53,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret0123456789abcdef}"
+    restart: unless-stopped
 
 volumes:
   hum_data:

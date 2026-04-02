@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-export interface HumMessage {
+export interface HumMessage { /* TEST */
   id: number;
   spaceId: number;
   channelId: string;
@@ -19,9 +19,6 @@ export interface VoicePeer {
 export type VoiceServerEvent =
   | { type: 'voice:joined'; spaceId: number; channelId: string; peers: VoicePeer[] }
   | { type: 'voice:presence'; spaceId: number; channelId: string; peers: VoicePeer[] }
-  | { type: 'voice:offer'; fromUserId: number; sdp: RTCSessionDescriptionInit }
-  | { type: 'voice:answer'; fromUserId: number; sdp: RTCSessionDescriptionInit }
-  | { type: 'voice:ice'; fromUserId: number; candidate: RTCIceCandidateInit }
   | { type: 'voice:peer_left'; userId: number };
 
 export interface PresenceUpdate {

@@ -19,6 +19,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.2",
     "jsonwebtoken": "^9.0.2",
+    "livekit-server-sdk": "^2.15.0",
     "postgres": "^3.4.8",
     "ws": "^8.16.0"
   },

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent } from './useSocket.js';
-import { useVoiceChat } from './useVoiceChat.js';
+import { useLiveKitVoice } from './useLiveKitVoice.js';
+
 import {
   Button,
   Input,
@@ -528,7 +529,7 @@ export default function App() {
     leave: leaveVoice,
     toggleMute,
     handleVoiceEvent,
-  } = useVoiceChat({ send, spaceId: activeSpaceId });
+  } = useLiveKitVoice({ send, spaceId: activeSpaceId, authToken: auth?.token ?? '' });
 
   const handleJoinVoice = async () => {
     setJoinError(null);

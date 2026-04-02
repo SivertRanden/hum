@@ -13,20 +13,16 @@ interface HumSocket extends WebSocket {
 // ── Text chat types ───────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'typing_start' | 'typing_stop';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'typing_start' | 'typing_stop';
   spaceId?: number;
   channelId?: string;
   content?: string;
   token?: string;
-  // voice signaling fields
-  targetUserId?: number;
-  sdp?: RTCSessionDescriptionInit;
-  candidate?: RTCIceCandidateInit;
 }
 
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
-      | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left'
+      | 'voice:joined' | 'voice:presence' | 'voice:peer_left'
       | 'typing' | 'presence_update' | 'mention' | 'channel:new_message';
   spaceId?: number;
   channelId?: string;
@@ -46,11 +42,8 @@ interface ServerMessage {
   messages?: ServerMessage['message'][];
   messageId?: number;
   error?: string;
-  // voice signaling fields
+  // voice presence fields
   peers?: Array<{ userId: number; username: string }>;
-  fromUserId?: number;
-  sdp?: RTCSessionDescriptionInit;
-  candidate?: RTCIceCandidateInit;
   userId?: number;
   // presence fields
   isOnline?: boolean;
@@ -268,7 +261,9 @@ export function createWsServer(server: import('http').Server) {
           }, socket);
         }
 
-        const history = (await queries.getMessages(spaceId, channelId, 100)).map((m) => ({
+        const rawHistory = await queries.getMessages(spaceId, channelId, 100);
+
+        const history = rawHistory.map((m) => ({
           id: m.id,
           spaceId: m.space_id,
           channelId: m.channel,
@@ -407,37 +402,6 @@ export function createWsServer(server: import('http').Server) {
         const key = roomKey(spaceId, channelId);
         activeVoiceRooms.delete(key);
         leaveVoiceRoom(socket, spaceId, channelId);
-        return;
-      }
-
-      // ── voice signaling: offer / answer / ice ─────────────────────────────
-      if (msg.type === 'voice:offer' || msg.type === 'voice:answer' || msg.type === 'voice:ice') {
-        if (!socket.userId || msg.targetUserId === undefined) return;
-        const spaceId = Number(msg.spaceId);
-        const channelId = msg.channelId ?? '';
-        const key = roomKey(spaceId, channelId);
-        const targetSocket = voiceRooms.get(key)?.get(msg.targetUserId);
-        if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) return;
-
-        if (msg.type === 'voice:offer') {
-          targetSocket.send(JSON.stringify({
-            type: 'voice:offer',
-            fromUserId: socket.userId,
-            sdp: msg.sdp,
-          } satisfies ServerMessage));
-        } else if (msg.type === 'voice:answer') {
-          targetSocket.send(JSON.stringify({
-            type: 'voice:answer',
-            fromUserId: socket.userId,
-            sdp: msg.sdp,
-          } satisfies ServerMessage));
-        } else {
-          targetSocket.send(JSON.stringify({
-            type: 'voice:ice',
-            fromUserId: socket.userId,
-            candidate: msg.candidate,
-          } satisfies ServerMessage));
-        }
         return;
       }
 
