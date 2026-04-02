@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, UserProfile } from './api.js';
+import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, UserProfile, SpaceEmoji } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
@@ -204,8 +204,10 @@ function ResetPasswordScreen({ token, onDone }: { token: string; onDone: () => v
 
 // ── @mention rendering ────────────────────────────────────────────────────────
 
-function renderMessageContent(content: string, myUsername: string): React.ReactNode {
-  const parts = content.split(/(@[a-zA-Z0-9_-]{2,32})/g);
+function renderMessageContent(content: string, myUsername: string, spaceEmoji?: SpaceEmoji[]): React.ReactNode {
+  const emojiMap = spaceEmoji ? Object.fromEntries(spaceEmoji.map(e => [e.name, e.image_url])) : {};
+  // Split on @mentions and :emoji: tokens
+  const parts = content.split(/(@[a-zA-Z0-9_-]{2,32}|:[a-z0-9_-]{2,32}:)/g);
   return parts.map((part, i) => {
     if (part.startsWith('@')) {
       const mentioned = part.slice(1).toLowerCase();
@@ -213,6 +215,14 @@ function renderMessageContent(content: string, myUsername: string): React.ReactN
       return (
         <span key={i} className={`mention${isMe ? ' mention-me' : ''}`}>{part}</span>
       );
+    }
+    if (part.startsWith(':') && part.endsWith(':')) {
+      const name = part.slice(1, -1);
+      if (emojiMap[name]) {
+        return (
+          <img key={i} src={emojiMap[name]} alt={`:${name}:`} className="custom-emoji-inline" title={`:${name}:`} />
+        );
+      }
     }
     return part;
   });
@@ -243,10 +253,18 @@ interface ReactionPillsProps {
   reactions: ReactionGroup[];
   myUserId: number;
   onToggle: (emoji: string) => void;
+  spaceEmoji?: SpaceEmoji[];
 }
 
-function ReactionPills({ reactions, myUserId, onToggle }: ReactionPillsProps) {
+function ReactionPills({ reactions, myUserId, onToggle, spaceEmoji }: ReactionPillsProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const renderEmojiLabel = (emoji: string) => {
+    if (!spaceEmoji) return emoji;
+    const custom = spaceEmoji.find(e => `:${e.name}:` === emoji);
+    if (custom) return <img src={custom.image_url} alt={emoji} className="custom-emoji-inline" />;
+    return emoji;
+  };
 
   return (
     <div className="msg-reactions">
@@ -259,7 +277,7 @@ function ReactionPills({ reactions, myUserId, onToggle }: ReactionPillsProps) {
             onClick={() => onToggle(rg.emoji)}
             title={rg.usernames.join(', ')}
           >
-            {rg.emoji} {rg.userIds.length}
+            {renderEmojiLabel(rg.emoji)} {rg.userIds.length}
           </button>
         );
       })}
@@ -274,6 +292,16 @@ function ReactionPills({ reactions, myUserId, onToggle }: ReactionPillsProps) {
                 onClick={() => { onToggle(e); setPickerOpen(false); }}
               >
                 {e}
+              </button>
+            ))}
+            {spaceEmoji && spaceEmoji.map(e => (
+              <button
+                key={`:${e.name}:`}
+                className="reaction-quick-btn"
+                onClick={() => { onToggle(`:${e.name}:`); setPickerOpen(false); }}
+                title={`:${e.name}:`}
+              >
+                <img src={e.image_url} alt={e.name} className="custom-emoji-inline" />
               </button>
             ))}
           </div>
@@ -297,9 +325,10 @@ interface MessageListProps {
   onToggleReaction: (messageId: number, emoji: string) => void;
   linkPreviews: Record<number, LinkPreview[]>;
   onOpenThread: (msg: HumMessage) => void;
+  spaceEmoji?: SpaceEmoji[];
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews, onOpenThread }: MessageListProps) {
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews, onOpenThread, spaceEmoji }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -377,7 +406,7 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
           ) : (
             <>
               <span className="msg-content">
-                {renderMessageContent(m.content, myUsername)}
+                {renderMessageContent(m.content, myUsername, spaceEmoji)}
                 {m.editedAt && <span className="msg-edited"> (edited)</span>}
               </span>
               {(linkPreviews[m.id] ?? m.linkPreviews ?? []).map((preview, i) => (
@@ -421,6 +450,7 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
                 reactions={reactions[m.id] ?? []}
                 myUserId={myUserId}
                 onToggle={(emoji) => onToggleReaction(m.id, emoji)}
+                spaceEmoji={spaceEmoji}
               />
             </>
           )}
@@ -580,6 +610,91 @@ function VoiceRoomView({
   );
 }
 
+// ── Emoji manager ─────────────────────────────────────────────────────────────
+
+interface EmojiManagerProps {
+  spaceId: number;
+  token: string;
+  emoji: SpaceEmoji[];
+  onClose: () => void;
+  onAdd: (e: SpaceEmoji) => void;
+  onDelete: (name: string) => void;
+}
+
+function EmojiManager({ spaceId, token, emoji, onClose, onAdd, onDelete }: EmojiManagerProps) {
+  const [newName, setNewName] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file || !newName.trim()) return;
+    setError('');
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const result = await api.addSpaceEmoji(token, spaceId, newName.trim().toLowerCase(), dataUrl);
+      onAdd(result);
+      setNewName('');
+      if (fileRef.current) fileRef.current.value = '';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (name: string) => {
+    try {
+      await api.deleteSpaceEmoji(token, spaceId, name);
+      onDelete(name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  return (
+    <div className="search-overlay" role="dialog" aria-label="Manage custom emoji">
+      <div className="search-panel emoji-manager">
+        <div className="search-input-row">
+          <span style={{ fontWeight: 600 }}>Custom Emoji</span>
+          <button className="search-close-btn" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="emoji-manager-add">
+          <input
+            className="emoji-name-input"
+            placeholder="name (e.g. parrot)"
+            value={newName}
+            onChange={e => setNewName(e.target.value.toLowerCase())}
+            maxLength={32}
+          />
+          <input ref={fileRef} type="file" accept="image/*" className="emoji-file-input" />
+          <button className="emoji-upload-btn" onClick={() => void handleUpload()} disabled={uploading || !newName.trim()}>
+            {uploading ? 'Uploading…' : 'Add'}
+          </button>
+        </div>
+        {error && <p className="emoji-error">{error}</p>}
+        <div className="emoji-list">
+          {emoji.length === 0 && <p className="emoji-empty">No custom emoji yet.</p>}
+          {emoji.map(e => (
+            <div key={e.name} className="emoji-row">
+              <img src={e.image_url} alt={e.name} className="emoji-preview" />
+              <span className="emoji-row-name">:{e.name}:</span>
+              <button className="emoji-delete-btn" onClick={() => void handleDelete(e.name)} title="Delete">✕</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Search panel ─────────────────────────────────────────────────────────────
 function highlightContent(content: string, query: string): React.ReactNode {
   const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
@@ -727,6 +842,8 @@ export default function App() {
   const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
   const [msgLinkPreviews, setMsgLinkPreviews] = useState<Record<number, LinkPreview[]>>({});
   const [dms, setDms] = useState<DmChannel[]>([]);
+  const [spaceEmoji, setSpaceEmoji] = useState<SpaceEmoji[]>([]);
+  const [showEmojiManager, setShowEmojiManager] = useState(false);
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
   activeSpaceIdRef.current = activeSpaceId;
@@ -780,6 +897,11 @@ export default function App() {
   useEffect(() => {
     if (!auth || !activeSpaceId) { setDms([]); return; }
     api.listDms(auth.token, activeSpaceId).then(setDms).catch(console.error);
+  }, [auth, activeSpaceId]);
+
+  useEffect(() => {
+    if (!auth || !activeSpaceId) { setSpaceEmoji([]); return; }
+    api.listSpaceEmoji(auth.token, activeSpaceId).then(setSpaceEmoji).catch(console.error);
   }, [auth, activeSpaceId]);
 
   // Auto-join via invite token in URL on mount
@@ -1152,6 +1274,7 @@ export default function App() {
   const activeSpace = spaces.find(s => s.id === activeSpaceId) ?? null;
   const inVoice = isVoiceChannel(activeChannelId);
   const inDm = isDmChannel(activeChannelId);
+  const isSpaceOwner = activeSpace?.created_by === auth?.userId;
 
   return (
     <div className="app-shell" data-mobile-view={mobileView}>
@@ -1253,6 +1376,18 @@ export default function App() {
                   <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                 </svg>
               </button>
+              {isSpaceOwner && (
+                <button
+                  className="header-search-btn"
+                  onClick={() => setShowEmojiManager(true)}
+                  aria-label="Manage custom emoji"
+                  title="Custom emoji"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                  </svg>
+                </button>
+              )}
             </header>
             {showSearch && (
               <SearchPanel
@@ -1260,6 +1395,16 @@ export default function App() {
                 token={auth.token}
                 onClose={() => setShowSearch(false)}
                 onJumpTo={handleSelectChannel}
+              />
+            )}
+            {showEmojiManager && activeSpaceId && (
+              <EmojiManager
+                spaceId={activeSpaceId}
+                token={auth.token}
+                emoji={spaceEmoji}
+                onClose={() => setShowEmojiManager(false)}
+                onAdd={(e) => setSpaceEmoji(prev => [...prev, e])}
+                onDelete={(name) => setSpaceEmoji(prev => prev.filter(e => e.name !== name))}
               />
             )}
 
@@ -1294,6 +1439,7 @@ export default function App() {
                   onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
                   linkPreviews={msgLinkPreviews}
                   onOpenThread={setOpenThread}
+                  spaceEmoji={spaceEmoji}
                 />
                 {typingUsers.size > 0 && (
                   <div className="typing-indicator">
