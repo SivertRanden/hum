@@ -85,6 +85,13 @@
       "when": 1775150000000,
       "tag": "0011_add_audit_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1775160000000,
+      "tag": "0013_add_oauth_fields",
+      "breakpoints": true
     }
   ]
 }

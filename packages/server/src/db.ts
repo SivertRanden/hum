@@ -26,6 +26,8 @@ export interface User {
   avatar_url: string | null;
   created_at: number;
   last_seen_at: number | null;
+  oauth_provider: string | null;
+  oauth_id: string | null;
 }
 
 export interface PasswordResetToken {
@@ -165,6 +167,8 @@ export interface Queries {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(username: string, password_hash: string, email?: string): Promise<{ id: number }>;
   updateUserPassword(userId: number, password_hash: string): Promise<void>;
+  getUserByOAuth(provider: string, oauthId: string): Promise<User | undefined>;
+  createOAuthUser(username: string, provider: string, oauthId: string, email?: string): Promise<{ id: number }>;
 
   createPasswordResetToken(userId: number, token: string, expiresAt: number): Promise<void>;
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
@@ -391,6 +395,20 @@ function buildSqliteQueries(): Queries {
 
     updateUserPassword: async (userId, password_hash) => {
       db.update(users).set({ password_hash }).where(eq(users.id, userId)).run();
+    },
+
+    getUserByOAuth: async (provider, oauthId) =>
+      db.select().from(users).where(and(eq(users.oauth_provider, provider), eq(users.oauth_id, oauthId))).get() as User | undefined,
+
+    createOAuthUser: async (username, provider, oauthId, email?) => {
+      const row = db.insert(users).values({
+        username,
+        password_hash: '',
+        oauth_provider: provider,
+        oauth_id: oauthId,
+        email: email ?? null,
+      }).returning({ id: users.id }).get()!;
+      return { id: row.id };
     },
 
     createPasswordResetToken: async (userId, token, expiresAt) => {
@@ -906,6 +924,22 @@ async function buildPgQueries(): Promise<Queries> {
 
     updateUserPassword: async (userId, password_hash) => {
       await db.update(users).set({ password_hash }).where(eq(users.id, userId));
+    },
+
+    getUserByOAuth: async (provider, oauthId) => {
+      const rows = await db.select().from(users).where(and(eq(users.oauth_provider, provider), eq(users.oauth_id, oauthId))).limit(1);
+      return rows[0] as User | undefined;
+    },
+
+    createOAuthUser: async (username, provider, oauthId, email?) => {
+      const rows = await db.insert(users).values({
+        username,
+        password_hash: '',
+        oauth_provider: provider,
+        oauth_id: oauthId,
+        email: email ?? null,
+      }).returning({ id: users.id });
+      return rows[0];
     },
 
     createPasswordResetToken: async (userId, token, expiresAt) => {
