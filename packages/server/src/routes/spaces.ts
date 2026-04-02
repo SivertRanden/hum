@@ -170,6 +170,24 @@ router.get('/:id/search', requireAuth, async (req: AuthRequest, res: Response) =
   res.json(results);
 });
 
+router.patch('/:id/channels/:channelId/topic', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const channelId = Number(req.params.channelId);
+  const { topic } = req.body as { topic?: string | null };
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const channel = await queries.getChannelById(channelId) as Channel | undefined;
+  if (!channel || channel.space_id !== spaceId) { res.status(404).json({ error: 'channel not found' }); return; }
+
+  const topicValue = typeof topic === 'string' ? topic.trim() || null : null;
+  const updated = await queries.updateChannelTopic(channelId, spaceId, topicValue, req.user!.userId);
+  if (!updated) { res.status(403).json({ error: 'not authorized to edit this channel' }); return; }
+
+  res.json({ id: channelId, topic: topicValue });
+});
+
 // ── Members ──────────────────────────────────────────────────────────────────
 
 router.get('/:id/members', requireAuth, async (req: AuthRequest, res: Response) => {

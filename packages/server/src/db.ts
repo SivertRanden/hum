@@ -48,6 +48,7 @@ export interface Channel {
   space_id: number;
   name: string;
   type: 'text' | 'voice';
+  topic: string | null;
   created_by: number;
   created_at: number;
 }
@@ -59,10 +60,28 @@ export interface Message {
   channel: string;
   content: string;
   link_previews: string | null;
+  reply_count: number;
   created_at: number;
   updated_at: number | null;
   deleted_at: number | null;
   username?: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface ThreadReply {
+  id: number;
+  parent_message_id: number;
+  space_id: number;
+  user_id: number;
+  channel: string;
+  content: string;
+  created_at: number;
+  updated_at: number | null;
+  deleted_at: number | null;
+  username?: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface SpaceMember {
@@ -145,6 +164,7 @@ export interface Queries {
   getChannelById(id: number): Promise<Channel | undefined>;
   createChannel(space_id: number, name: string, type: string, created_by: number): Promise<{ id: number }>;
   deleteChannel(id: number, space_id: number): Promise<void>;
+  updateChannelTopic(id: number, space_id: number, topic: string | null, user_id: number): Promise<boolean>;
 
   getMessages(space_id: number, channel: string, limit: number): Promise<Message[]>;
   insertMessage(space_id: number, user_id: number, channel: string, content: string): Promise<{ id: number }>;
@@ -179,6 +199,9 @@ export interface Queries {
 
   searchMessages(space_id: number, query: string, channel: string | null, limit: number): Promise<SearchResult[]>;
 
+  getThread(space_id: number, message_id: number): Promise<{ parent: Message; replies: ThreadReply[] } | undefined>;
+  insertThreadReply(parent_message_id: number, space_id: number, user_id: number, channel: string, content: string): Promise<{ id: number; reply_count: number }>;
+
   enqueueNotification(user_id: number, message_id: number, space_id: number, channel: string): Promise<void>;
   getPendingNotifications(): Promise<PendingNotification[]>;
   markNotificationsSent(ids: number[]): Promise<void>;
@@ -197,7 +220,7 @@ export interface SearchResult {
 // ── SQLite driver ─────────────────────────────────────────────────────────────
 
 function buildSqliteQueries(): Queries {
-  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens } = sqliteSchema;
+  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies } = sqliteSchema;
 
   const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, '../../hum.db');
   const MIGRATIONS_FOLDER = path.join(__dirname, '../drizzle');
@@ -211,10 +234,12 @@ function buildSqliteQueries(): Queries {
 
   // Backward-compat: add columns that predate the Drizzle migration for existing databases
   try { rawDb.exec("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'"); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE messages ADD COLUMN reply_count INTEGER NOT NULL DEFAULT 0'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN updated_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN deleted_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN link_previews TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN last_seen_at INTEGER'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE channels ADD COLUMN topic TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN display_name TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT'); } catch { /* already exists */ }
 
@@ -311,6 +336,20 @@ function buildSqliteQueries(): Queries {
       db.delete(channels).where(and(eq(channels.id, id), eq(channels.space_id, space_id))).run();
     },
 
+    updateChannelTopic: async (id, space_id, topic, user_id) => {
+      // Only space owner or moderator can update topic
+      const member = await db.select()
+        .from(space_members)
+        .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)))
+        .get();
+      if (!member || (member.role !== 'owner' && member.role !== 'moderator')) return false;
+      const result = db.update(channels)
+        .set({ topic })
+        .where(and(eq(channels.id, id), eq(channels.space_id, space_id)))
+        .run();
+      return result.changes > 0;
+    },
+
     getMessages: async (space_id, channel, limit) =>
       db.select({
         id: messages.id,
@@ -319,10 +358,13 @@ function buildSqliteQueries(): Queries {
         channel: messages.channel,
         content: messages.content,
         link_previews: messages.link_previews,
+        reply_count: messages.reply_count,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -348,10 +390,13 @@ function buildSqliteQueries(): Queries {
         channel: messages.channel,
         content: messages.content,
         link_previews: messages.link_previews,
+        reply_count: messages.reply_count,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -592,6 +637,58 @@ function buildSqliteQueries(): Queries {
       rawDb.prepare(`UPDATE notification_queue SET sent_at = unixepoch() WHERE id IN (${placeholders})`).run(...ids);
     },
 
+    getThread: async (space_id, message_id) => {
+      const parent = db.select({
+        id: messages.id,
+        space_id: messages.space_id,
+        user_id: messages.user_id,
+        channel: messages.channel,
+        content: messages.content,
+        reply_count: messages.reply_count,
+        created_at: messages.created_at,
+        updated_at: messages.updated_at,
+        deleted_at: messages.deleted_at,
+        username: users.username,
+      })
+        .from(messages)
+        .innerJoin(users, eq(messages.user_id, users.id))
+        .where(and(eq(messages.id, message_id), eq(messages.space_id, space_id), isNull(messages.deleted_at)))
+        .get() as Message | undefined;
+      if (!parent) return undefined;
+      const replies = db.select({
+        id: thread_replies.id,
+        parent_message_id: thread_replies.parent_message_id,
+        space_id: thread_replies.space_id,
+        user_id: thread_replies.user_id,
+        channel: thread_replies.channel,
+        content: thread_replies.content,
+        created_at: thread_replies.created_at,
+        updated_at: thread_replies.updated_at,
+        deleted_at: thread_replies.deleted_at,
+        username: users.username,
+      })
+        .from(thread_replies)
+        .innerJoin(users, eq(thread_replies.user_id, users.id))
+        .where(and(eq(thread_replies.parent_message_id, message_id), isNull(thread_replies.deleted_at)))
+        .orderBy(asc(thread_replies.created_at))
+        .all() as ThreadReply[];
+      return { parent, replies };
+    },
+
+    insertThreadReply: async (parent_message_id, space_id, user_id, channel, content) => {
+      const row = db.insert(thread_replies)
+        .values({ parent_message_id, space_id, user_id, channel, content })
+        .returning({ id: thread_replies.id })
+        .get()!;
+      db.update(messages)
+        .set({ reply_count: sql`${messages.reply_count} + 1` })
+        .where(eq(messages.id, parent_message_id))
+        .run();
+      const parent = db.select({ reply_count: messages.reply_count })
+        .from(messages).where(eq(messages.id, parent_message_id)).get() as { reply_count: number } | undefined;
+      return { id: row.id, reply_count: parent?.reply_count ?? 0 };
+    },
+
   };
 }
 
@@ -604,7 +701,7 @@ async function buildPgQueries(): Promise<Queries> {
   const postgres = postgresModule.default;
   const pgSchema = await import('./schema.pg.js');
 
-  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens } = pgSchema;
+  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies } = pgSchema;
 
   const MIGRATIONS_FOLDER = path.join(__dirname, '../drizzle.pg');
 
@@ -697,6 +794,20 @@ async function buildPgQueries(): Promise<Queries> {
       await db.delete(channels).where(and(eq(channels.id, id), eq(channels.space_id, space_id)));
     },
 
+    updateChannelTopic: async (id, space_id, topic, user_id) => {
+      const members = await db.select()
+        .from(space_members)
+        .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)))
+        .limit(1);
+      const member = members[0];
+      if (!member || (member.role !== 'owner' && member.role !== 'moderator')) return false;
+      const rows = await db.update(channels)
+        .set({ topic })
+        .where(and(eq(channels.id, id), eq(channels.space_id, space_id)))
+        .returning({ id: channels.id });
+      return rows.length > 0;
+    },
+
     getMessages: async (space_id, channel, limit) => {
       return db.select({
         id: messages.id,
@@ -705,10 +816,13 @@ async function buildPgQueries(): Promise<Queries> {
         channel: messages.channel,
         content: messages.content,
         link_previews: messages.link_previews,
+        reply_count: messages.reply_count,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -734,10 +848,13 @@ async function buildPgQueries(): Promise<Queries> {
         channel: messages.channel,
         content: messages.content,
         link_previews: messages.link_previews,
+        reply_count: messages.reply_count,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
       })
         .from(messages)
         .innerJoin(users, eq(messages.user_id, users.id))
@@ -977,6 +1094,56 @@ async function buildPgQueries(): Promise<Queries> {
         UPDATE notification_queue SET sent_at = extract(epoch from now())::int
         WHERE id = ANY(${ids})
       `;
+    },
+
+    getThread: async (space_id, message_id) => {
+      const parentRows = await db.select({
+        id: messages.id,
+        space_id: messages.space_id,
+        user_id: messages.user_id,
+        channel: messages.channel,
+        content: messages.content,
+        reply_count: messages.reply_count,
+        created_at: messages.created_at,
+        updated_at: messages.updated_at,
+        deleted_at: messages.deleted_at,
+        username: users.username,
+      })
+        .from(messages)
+        .innerJoin(users, eq(messages.user_id, users.id))
+        .where(and(eq(messages.id, message_id), eq(messages.space_id, space_id), isNull(messages.deleted_at)))
+        .limit(1);
+      const parent = parentRows[0] as Message | undefined;
+      if (!parent) return undefined;
+      const replies = await db.select({
+        id: thread_replies.id,
+        parent_message_id: thread_replies.parent_message_id,
+        space_id: thread_replies.space_id,
+        user_id: thread_replies.user_id,
+        channel: thread_replies.channel,
+        content: thread_replies.content,
+        created_at: thread_replies.created_at,
+        updated_at: thread_replies.updated_at,
+        deleted_at: thread_replies.deleted_at,
+        username: users.username,
+      })
+        .from(thread_replies)
+        .innerJoin(users, eq(thread_replies.user_id, users.id))
+        .where(and(eq(thread_replies.parent_message_id, message_id), isNull(thread_replies.deleted_at)))
+        .orderBy(asc(thread_replies.created_at));
+      return { parent, replies: replies as ThreadReply[] };
+    },
+
+    insertThreadReply: async (parent_message_id, space_id, user_id, channel, content) => {
+      const rows = await db.insert(thread_replies)
+        .values({ parent_message_id, space_id, user_id, channel, content })
+        .returning({ id: thread_replies.id });
+      await db.update(messages)
+        .set({ reply_count: sql`${messages.reply_count} + 1` })
+        .where(eq(messages.id, parent_message_id));
+      const parentRows = await db.select({ reply_count: messages.reply_count })
+        .from(messages).where(eq(messages.id, parent_message_id)).limit(1);
+      return { id: rows[0].id, reply_count: parentRows[0]?.reply_count ?? 0 };
     },
 
   };
