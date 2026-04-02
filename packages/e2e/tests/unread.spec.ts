@@ -172,23 +172,26 @@ test.describe('Unread indicators', () => {
     await joinViaInvite(pageA, pageB, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
-    await pageA.locator('.channel-item', { hasText: 'other' }).click();
-    await pageB.locator('.channel-item', { hasText: 'general' }).click();
+    // User A stays in general; user B sends a message in "other" so the
+    // unread dot appears on a non-default channel. After reload the app
+    // defaults to "general", so the unread on "other" should survive.
+    await pageA.locator('.channel-item', { hasText: 'general' }).click();
+    await pageB.locator('.channel-item', { hasText: 'other' }).click();
 
     await pageB.locator('.compose input:not([type="file"])').fill('Persist me!');
     await pageB.getByRole('button', { name: /^send$/i }).click();
 
-    const generalItem = pageA.locator('.channel-item', { hasText: 'general' });
-    await expect(generalItem.locator('.unread-dot')).toBeVisible({ timeout: 5_000 });
+    const otherItem = pageA.locator('.channel-item', { hasText: 'other' });
+    await expect(otherItem.locator('.unread-dot')).toBeVisible({ timeout: 5_000 });
 
     // Reload user A's page
     await pageA.reload();
     await expect(pageA.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    // Re-select the space after reload
-    await expect(pageA.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    // Wait for the space to re-render after reload
+    await expect(pageA.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
-    // Dot should still be present after reload
-    await expect(pageA.locator('.channel-item', { hasText: 'general' }).locator('.unread-dot')).toBeVisible({ timeout: 5_000 });
+    // Dot should still be present on "other" after reload (app defaults to general)
+    await expect(pageA.locator('.channel-item', { hasText: 'other' }).locator('.unread-dot')).toBeVisible({ timeout: 5_000 });
 
     await ctxA.close();
     await ctxB.close();
