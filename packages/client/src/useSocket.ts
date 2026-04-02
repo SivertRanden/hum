@@ -31,6 +31,7 @@ export interface HumMessage {
   content: string;
   createdAt: number;
   editedAt?: number;
+  pinnedAt?: number | null;
   reactions?: ReactionGroup[];
   linkPreviews?: LinkPreview[];
   attachments?: MessageAttachment[];

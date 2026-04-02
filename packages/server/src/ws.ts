@@ -54,6 +54,7 @@ interface ServerMessage {
     content: string;
     createdAt: number;
     editedAt?: number;
+    pinnedAt?: number | null;
     reactions?: ReactionGroup[];
     attachments?: { id: number; filename: string; url: string; mimeType: string; size: number }[];
     linkPreviews?: LinkPreview[];
@@ -322,6 +323,7 @@ export function createWsServer(server: import('http').Server) {
             content: m.content,
             createdAt: m.created_at,
             editedAt: m.updated_at ?? undefined,
+            pinnedAt: m.pinned_at ?? undefined,
             reactions: grouped.length > 0 ? grouped : undefined,
             linkPreviews,
             replyCount: m.reply_count ?? 0,
