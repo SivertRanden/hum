@@ -116,6 +116,18 @@ export const notification_queue = sqliteTable('notification_queue', {
   sent_at: integer('sent_at'),
 });
 
+export const message_attachments = sqliteTable('message_attachments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  message_id: integer('message_id').references(() => messages.id, { onDelete: 'cascade' }),
+  filename: text('filename').notNull(),
+  storage_key: text('storage_key').notNull(),
+  mime_type: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('idx_attachments_message').on(table.message_id),
+]);
+
 export const thread_replies = sqliteTable('thread_replies', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   parent_message_id: integer('parent_message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),

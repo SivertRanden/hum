@@ -368,6 +368,23 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onE
               {(linkPreviews[m.id] ?? m.linkPreviews ?? []).map((preview, i) => (
                 <LinkPreviewCard key={i} preview={preview} />
               ))}
+              {(m.attachments ?? []).length > 0 && (
+                <div className="msg-attachments">
+                  {(m.attachments ?? []).map(att => (
+                    <div key={att.id} className="msg-attachment">
+                      {att.mimeType.startsWith('image/') ? (
+                        <a href={att.url} target="_blank" rel="noopener noreferrer">
+                          <img src={att.url} alt={att.filename} className="msg-attachment-image" />
+                        </a>
+                      ) : (
+                        <a href={att.url} download={att.filename} className="msg-attachment-file">
+                          📎 {att.filename}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               {m.userId === myUserId && (
                 <span className="msg-actions">
                   <button className="msg-action-btn" onClick={() => startEdit(m)} title="Edit">✎</button>
@@ -656,6 +673,9 @@ export default function App() {
   const [messages, setMessages] = useState<HumMessage[]>([]);
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [input, setInput] = useState('');
+  const [pendingAttachment, setPendingAttachment] = useState<{ id: number; url: string; filename: string; mimeType: string; size: number } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
@@ -1005,11 +1025,29 @@ export default function App() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    sendMessage(input.trim());
+    if (!input.trim() && !pendingAttachment) return;
+    sendMessage(input.trim(), pendingAttachment?.id);
     if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
     if (isTypingRef.current) { sendTypingStop(); isTypingRef.current = false; }
     setInput('');
+    setPendingAttachment(null);
+  };
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !auth) return;
+    e.target.value = '';
+    setUploadError(null);
+    try {
+      const result = await api.uploadFile(auth.token, file);
+      setPendingAttachment(result);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    }
   };
 
   const handleCreateInvite = async (): Promise<string> => {
@@ -1191,7 +1229,30 @@ export default function App() {
                     {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing…
                   </div>
                 )}
+                {uploadError && (
+                  <div className="upload-error">{uploadError}</div>
+                )}
+                {pendingAttachment && (
+                  <div className="pending-attachment">
+                    {pendingAttachment.mimeType.startsWith('image/') ? (
+                      <img src={pendingAttachment.url} alt={pendingAttachment.filename} className="pending-attachment-preview" />
+                    ) : (
+                      <span className="pending-attachment-name">📎 {pendingAttachment.filename}</span>
+                    )}
+                    <button type="button" className="pending-attachment-remove" onClick={() => setPendingAttachment(null)}>✕</button>
+                  </div>
+                )}
                 <form className="compose" onSubmit={handleSend}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    style={{ display: 'none' }}
+                    onChange={handleFileChange}
+                    accept="image/*,application/pdf,text/*,.zip,.doc,.docx,.xls,.xlsx"
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={handleAttachClick} title="Attach file">
+                    📎
+                  </Button>
                   <Input
                     value={input}
                     onChange={handleInputChange}
@@ -1199,7 +1260,7 @@ export default function App() {
                     autoFocus
                     className="flex-1"
                   />
-                  <Button type="submit" disabled={!input.trim()} size="sm">send</Button>
+                  <Button type="submit" disabled={!input.trim() && !pendingAttachment} size="sm">send</Button>
                 </form>
               </>
             )}

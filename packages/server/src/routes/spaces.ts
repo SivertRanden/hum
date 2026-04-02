@@ -92,6 +92,13 @@ router.get('/:id/messages', requireAuth, async (req: AuthRequest, res: Response)
     return;
   }
   const messages = await queries.getMessages(spaceId, channel, limit);
+  if (messages.length > 0) {
+    const msgIds = messages.map(m => m.id);
+    const attachmentMap = await queries.getAttachmentsForMessages(msgIds);
+    for (const m of messages) {
+      m.attachments = attachmentMap[m.id] ?? [];
+    }
+  }
   res.json(messages);
 });
 

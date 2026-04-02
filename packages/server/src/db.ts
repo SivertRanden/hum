@@ -53,6 +53,16 @@ export interface Channel {
   created_at: number;
 }
 
+export interface Attachment {
+  id: number;
+  message_id: number | null;
+  filename: string;
+  storage_key: string;
+  mime_type: string;
+  size: number;
+  created_at: number;
+}
+
 export interface Message {
   id: number;
   space_id: number;
@@ -67,6 +77,7 @@ export interface Message {
   username?: string;
   display_name?: string | null;
   avatar_url?: string | null;
+  attachments?: Attachment[];
 }
 
 export interface ThreadReply {
@@ -205,6 +216,10 @@ export interface Queries {
   enqueueNotification(user_id: number, message_id: number, space_id: number, channel: string): Promise<void>;
   getPendingNotifications(): Promise<PendingNotification[]>;
   markNotificationsSent(ids: number[]): Promise<void>;
+
+  insertAttachment(filename: string, storage_key: string, mime_type: string, size: number): Promise<{ id: number }>;
+  linkAttachmentToMessage(attachment_id: number, message_id: number): Promise<void>;
+  getAttachmentsForMessages(message_ids: number[]): Promise<Record<number, Attachment[]>>;
 }
 
 export interface SearchResult {
@@ -220,7 +235,7 @@ export interface SearchResult {
 // ── SQLite driver ─────────────────────────────────────────────────────────────
 
 function buildSqliteQueries(): Queries {
-  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies } = sqliteSchema;
+  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies, message_attachments } = sqliteSchema;
 
   const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, '../../hum.db');
   const MIGRATIONS_FOLDER = path.join(__dirname, '../drizzle');
@@ -637,6 +652,28 @@ function buildSqliteQueries(): Queries {
       rawDb.prepare(`UPDATE notification_queue SET sent_at = unixepoch() WHERE id IN (${placeholders})`).run(...ids);
     },
 
+    insertAttachment: async (filename, storage_key, mime_type, size) => {
+      const row = db.insert(message_attachments).values({ filename, storage_key, mime_type, size }).returning({ id: message_attachments.id }).get()!;
+      return { id: row.id };
+    },
+
+    linkAttachmentToMessage: async (attachment_id, message_id) => {
+      db.update(message_attachments).set({ message_id }).where(eq(message_attachments.id, attachment_id)).run();
+    },
+
+    getAttachmentsForMessages: async (message_ids) => {
+      if (message_ids.length === 0) return {};
+      const rows = db.select().from(message_attachments).where(inArray(message_attachments.message_id, message_ids)).all() as Attachment[];
+      const result: Record<number, Attachment[]> = {};
+      for (const row of rows) {
+        if (row.message_id !== null) {
+          if (!result[row.message_id]) result[row.message_id] = [];
+          result[row.message_id].push(row);
+        }
+      }
+      return result;
+    },
+
     getThread: async (space_id, message_id) => {
       const parent = db.select({
         id: messages.id,
@@ -701,7 +738,7 @@ async function buildPgQueries(): Promise<Queries> {
   const postgres = postgresModule.default;
   const pgSchema = await import('./schema.pg.js');
 
-  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies } = pgSchema;
+  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies, message_attachments } = pgSchema;
 
   const MIGRATIONS_FOLDER = path.join(__dirname, '../drizzle.pg');
 
@@ -1094,6 +1131,28 @@ async function buildPgQueries(): Promise<Queries> {
         UPDATE notification_queue SET sent_at = extract(epoch from now())::int
         WHERE id = ANY(${ids})
       `;
+    },
+
+    insertAttachment: async (filename, storage_key, mime_type, size) => {
+      const rows = await db.insert(message_attachments).values({ filename, storage_key, mime_type, size }).returning({ id: message_attachments.id });
+      return { id: rows[0].id };
+    },
+
+    linkAttachmentToMessage: async (attachment_id, message_id) => {
+      await db.update(message_attachments).set({ message_id }).where(eq(message_attachments.id, attachment_id));
+    },
+
+    getAttachmentsForMessages: async (message_ids) => {
+      if (message_ids.length === 0) return {};
+      const rows = await db.select().from(message_attachments).where(inArray(message_attachments.message_id, message_ids)) as Attachment[];
+      const result: Record<number, Attachment[]> = {};
+      for (const row of rows) {
+        if (row.message_id !== null) {
+          if (!result[row.message_id]) result[row.message_id] = [];
+          result[row.message_id].push(row);
+        }
+      }
+      return result;
     },
 
     getThread: async (space_id, message_id) => {

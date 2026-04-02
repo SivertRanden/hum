@@ -14,6 +14,14 @@ export interface LinkPreview {
   siteName?: string;
 }
 
+export interface MessageAttachment {
+  id: number;
+  filename: string;
+  url: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface HumMessage {
   id: number;
   spaceId: number;
@@ -25,6 +33,7 @@ export interface HumMessage {
   editedAt?: number;
   reactions?: ReactionGroup[];
   linkPreviews?: LinkPreview[];
+  attachments?: MessageAttachment[];
 }
 
 export interface ReactionEvent {
@@ -145,8 +154,8 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
     }
   }, []);
 
-  const sendMessage = useCallback((content: string) => {
-    send({ type: 'message', content });
+  const sendMessage = useCallback((content: string, attachmentId?: number) => {
+    send({ type: 'message', content, ...(attachmentId !== undefined && { attachmentId }) });
   }, [send]);
 
   const sendTypingStart = useCallback(() => send({ type: 'typing_start' }), [send]);
