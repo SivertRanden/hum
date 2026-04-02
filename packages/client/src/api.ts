@@ -119,6 +119,18 @@ export interface ThreadReplyData {
   reply_count: number;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  space_id: number;
+  user_id: number;
+  username: string;
+  action: string;
+  target_type: string | null;
+  target_id: number | null;
+  meta: string | null;
+  created_at: number;
+}
+
 export interface ThreadData {
   parent: {
     id: number;
@@ -257,4 +269,7 @@ export const api = {
 
   kickMember: (token: string, spaceId: number, userId: number) =>
     del(`/spaces/${spaceId}/members/${userId}`, token),
+
+  getAuditLogs: (token: string, spaceId: number, limit = 100) =>
+    get<AuditLogEntry[]>(`/spaces/${spaceId}/audit-log?limit=${limit}`, token),
 };

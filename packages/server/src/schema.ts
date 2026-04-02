@@ -128,6 +128,19 @@ export const message_attachments = sqliteTable('message_attachments', {
   index('idx_attachments_message').on(table.message_id),
 ]);
 
+export const audit_logs = sqliteTable('audit_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  target_type: text('target_type'),
+  target_id: integer('target_id'),
+  meta: text('meta'),
+  created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  index('idx_audit_logs_space').on(table.space_id, table.created_at),
+]);
+
 export const thread_replies = sqliteTable('thread_replies', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   parent_message_id: integer('parent_message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),

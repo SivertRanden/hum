@@ -16,6 +16,7 @@ import {
 import { ServerRail } from './components/ServerRail.js';
 import { ChannelSidebar } from './components/ChannelSidebar.js';
 import { ThreadPanel } from './components/ThreadPanel.js';
+import { AdminDashboard } from './components/AdminDashboard.js';
 import './app.css';
 
 interface AuthState {
@@ -702,6 +703,7 @@ export default function App() {
   const isTypingRef = useRef(false);
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
+  const [showAdmin, setShowAdmin] = useState(false);
   const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
   const [msgLinkPreviews, setMsgLinkPreviews] = useState<Record<number, LinkPreview[]>>({});
   const [dms, setDms] = useState<DmChannel[]>([]);
@@ -1209,6 +1211,18 @@ export default function App() {
                   </span>
                 )
               )}
+              {members.some(m => m.user_id === auth.userId && m.role === 'owner') && (
+                <button
+                  className="header-search-btn"
+                  onClick={() => setShowAdmin(true)}
+                  aria-label="Admin dashboard"
+                  title="Admin"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                  </svg>
+                </button>
+              )}
               <button
                 className="header-search-btn"
                 onClick={() => setShowSearch(true)}
@@ -1323,6 +1337,15 @@ export default function App() {
           myUsername={auth.username}
           onClose={() => setOpenThread(null)}
           onReplyCountUpdate={handleReplyCountUpdate}
+        />
+      )}
+
+      {showAdmin && activeSpace && (
+        <AdminDashboard
+          space={activeSpace}
+          members={members}
+          token={auth.token}
+          onClose={() => setShowAdmin(false)}
         />
       )}
 

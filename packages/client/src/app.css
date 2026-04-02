@@ -1764,3 +1764,163 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .msg-action-reply {
   color: var(--text-muted);
 }
+
+/* ── Admin dashboard ─────────────────────────────────────────────────────── */
+
+.admin-dashboard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.admin-dashboard {
+  background: var(--surface1, #1e1f22);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 12px;
+  width: min(680px, 96vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+
+.admin-dashboard-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text, #fff);
+  margin: 0;
+}
+
+.admin-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim, #aaa);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.admin-close-btn:hover { color: var(--text, #fff); background: var(--surface2, rgba(255,255,255,0.06)); }
+
+.admin-tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  gap: 4px;
+}
+
+.admin-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim, #aaa);
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  transition: color 0.15s, border-color 0.15s;
+}
+.admin-tab.active { color: var(--accent, #7c3aed); border-bottom-color: var(--accent, #7c3aed); }
+.admin-tab:hover:not(.active) { color: var(--text, #fff); }
+
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 20px;
+}
+
+.admin-section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.admin-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim, #aaa);
+}
+
+.admin-refresh-btn {
+  background: none;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  color: var(--text-dim, #aaa);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+.admin-refresh-btn:hover:not(:disabled) { color: var(--text, #fff); border-color: var(--text-dim, #aaa); }
+.admin-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.admin-error { color: var(--hum-error, #ef4444); font-size: 0.85rem; padding: 8px 0; }
+.admin-empty { color: var(--text-dim, #aaa); font-size: 0.85rem; padding: 8px 0; }
+
+.audit-log-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.audit-log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.audit-log-entry:hover { background: var(--surface2, rgba(255,255,255,0.04)); }
+
+.audit-log-time { color: var(--text-dim, #888); font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+.audit-log-actor { color: var(--text, #fff); font-weight: 500; flex-shrink: 0; }
+.audit-log-action { color: var(--text, #e0e0e0); }
+.audit-log-meta { color: var(--text-dim, #aaa); font-size: 0.78rem; }
+
+.admin-stats-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-stat {
+  background: var(--surface2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 8px;
+  padding: 12px 20px;
+  text-align: center;
+  min-width: 100px;
+}
+.admin-stat-value { font-size: 1.6rem; font-weight: 700; color: var(--accent, #7c3aed); }
+.admin-stat-label { font-size: 0.75rem; color: var(--text-dim, #aaa); margin-top: 2px; }
+
+.admin-member-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.admin-member-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.admin-member-entry:hover { background: var(--surface2, rgba(255,255,255,0.04)); }
+.admin-member-info { flex: 1; display: flex; align-items: center; gap: 8px; }
+.admin-member-name { color: var(--text, #fff); font-size: 0.88rem; font-weight: 500; }
+.admin-member-joined { color: var(--text-dim, #888); font-size: 0.75rem; margin-left: auto; }

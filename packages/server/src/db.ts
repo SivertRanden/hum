@@ -4,7 +4,8 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
-import { eq, and, isNull, asc, sql, inArray, ne } from 'drizzle-orm';
+import { migrate as migrateSqlite } from 'drizzle-orm/better-sqlite3/migrator';
+import { eq, and, isNull, asc, desc, sql, inArray, ne } from 'drizzle-orm';
 import * as sqliteSchema from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -222,6 +223,9 @@ export interface Queries {
   getPendingNotifications(): Promise<PendingNotification[]>;
   markNotificationsSent(ids: number[]): Promise<void>;
 
+  logAudit(space_id: number, user_id: number, action: string, target_type?: string | null, target_id?: number | null, meta?: string | null): Promise<void>;
+  getAuditLogs(space_id: number, limit: number): Promise<AuditLogEntry[]>;
+
   insertAttachment(filename: string, storage_key: string, mime_type: string, size: number): Promise<{ id: number }>;
   linkAttachmentToMessage(attachment_id: number, message_id: number): Promise<void>;
   getAttachmentsForMessages(message_ids: number[]): Promise<Record<number, Attachment[]>>;
@@ -234,6 +238,18 @@ export interface SearchResult {
   user_id: number;
   username: string;
   content: string;
+  created_at: number;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  space_id: number;
+  user_id: number;
+  username: string;
+  action: string;
+  target_type: string | null;
+  target_id: number | null;
+  meta: string | null;
   created_at: number;
 }
 
@@ -353,6 +369,11 @@ function buildSqliteQueries(): Queries {
 
   const nowEpoch = sql`(unixepoch())`;
 
+  const _logAudit = (space_id: number, user_id: number, action: string, target_type?: string | null, target_id?: number | null, meta?: string | null) => {
+    const { audit_logs } = sqliteSchema;
+    try { db.insert(audit_logs).values({ space_id, user_id, action, target_type: target_type ?? null, target_id: target_id ?? null, meta: meta ?? null }).run(); } catch { /* non-fatal */ }
+  };
+
   return {
     getUserByUsername: async (username) =>
       db.select().from(users).where(eq(users.username, username)).get() as User | undefined,
@@ -412,6 +433,7 @@ function buildSqliteQueries(): Queries {
 
     createChannel: async (space_id, name, type, created_by) => {
       const row = db.insert(channels).values({ space_id, name, type, created_by }).returning({ id: channels.id }).get()!;
+      _logAudit(space_id, created_by, 'channel.create', 'channel', row.id, JSON.stringify({ name, type }));
       return { id: row.id };
     },
 
@@ -430,6 +452,7 @@ function buildSqliteQueries(): Queries {
         .set({ topic })
         .where(and(eq(channels.id, id), eq(channels.space_id, space_id)))
         .run();
+      if (result.changes > 0) _logAudit(space_id, user_id, 'channel.topic', 'channel', id, JSON.stringify({ topic }));
       return result.changes > 0;
     },
 
@@ -805,6 +828,32 @@ function buildSqliteQueries(): Queries {
       const parent = db.select({ reply_count: messages.reply_count })
         .from(messages).where(eq(messages.id, parent_message_id)).get() as { reply_count: number } | undefined;
       return { id: row.id, reply_count: parent?.reply_count ?? 0 };
+    },
+
+    logAudit: async (space_id, user_id, action, target_type = null, target_id = null, meta = null) => {
+      const { audit_logs } = sqliteSchema;
+      db.insert(audit_logs).values({ space_id, user_id, action, target_type, target_id, meta }).run();
+    },
+
+    getAuditLogs: async (space_id, limit) => {
+      const { audit_logs } = sqliteSchema;
+      return db.select({
+        id: audit_logs.id,
+        space_id: audit_logs.space_id,
+        user_id: audit_logs.user_id,
+        username: users.username,
+        action: audit_logs.action,
+        target_type: audit_logs.target_type,
+        target_id: audit_logs.target_id,
+        meta: audit_logs.meta,
+        created_at: audit_logs.created_at,
+      })
+        .from(audit_logs)
+        .innerJoin(users, eq(audit_logs.user_id, users.id))
+        .where(eq(audit_logs.space_id, space_id))
+        .orderBy(desc(audit_logs.created_at))
+        .limit(limit)
+        .all() as AuditLogEntry[];
     },
 
   };
@@ -1295,6 +1344,32 @@ async function buildPgQueries(): Promise<Queries> {
       const parentRows = await db.select({ reply_count: messages.reply_count })
         .from(messages).where(eq(messages.id, parent_message_id)).limit(1);
       return { id: rows[0].id, reply_count: parentRows[0]?.reply_count ?? 0 };
+    },
+
+    logAudit: async (space_id, user_id, action, target_type = null, target_id = null, meta = null) => {
+      const { audit_logs } = pgSchema;
+      await db.insert(audit_logs).values({ space_id, user_id, action, target_type, target_id, meta });
+    },
+
+    getAuditLogs: async (space_id, limit) => {
+      const { audit_logs } = pgSchema;
+      const rows = await db.select({
+        id: audit_logs.id,
+        space_id: audit_logs.space_id,
+        user_id: audit_logs.user_id,
+        username: users.username,
+        action: audit_logs.action,
+        target_type: audit_logs.target_type,
+        target_id: audit_logs.target_id,
+        meta: audit_logs.meta,
+        created_at: audit_logs.created_at,
+      })
+        .from(audit_logs)
+        .innerJoin(users, eq(audit_logs.user_id, users.id))
+        .where(eq(audit_logs.space_id, space_id))
+        .orderBy(desc(audit_logs.created_at))
+        .limit(limit);
+      return rows as AuditLogEntry[];
     },
 
   };

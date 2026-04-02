@@ -94,6 +94,7 @@ router.delete('/:id/channels/:channelId', requireAuth, async (req: AuthRequest, 
   const channel = await queries.getChannelById(channelId) as Channel | undefined;
   if (!channel || channel.space_id !== spaceId) { res.status(404).json({ error: 'channel not found' }); return; }
   await queries.deleteChannel(channelId, spaceId);
+  void queries.logAudit(spaceId, req.user!.userId, 'channel.delete', 'channel', channelId, JSON.stringify({ name: channel.name, type: channel.type }));
   res.status(204).end();
 });
 
@@ -135,6 +136,8 @@ router.patch('/:id/messages/:messageId', requireAuth, async (req: AuthRequest, r
   const updated = await queries.updateMessage(trimmed, messageId, req.user!.userId);
   if (!updated) { res.status(404).json({ error: 'message not found' }); return; }
 
+  void queries.logAudit(spaceId, req.user!.userId, 'message.edit', 'message', messageId);
+
   const fresh = await queries.getMessageById(messageId);
   const editedAt = fresh?.updated_at ?? Math.floor(Date.now() / 1000);
 
@@ -168,6 +171,8 @@ router.delete('/:id/messages/:messageId', requireAuth, async (req: AuthRequest, 
 
   const deleted = await queries.softDeleteMessage(messageId, req.user!.userId);
   if (!deleted) { res.status(404).json({ error: 'message not found' }); return; }
+
+  void queries.logAudit(spaceId, req.user!.userId, 'message.delete', 'message', messageId);
 
   broadcast(spaceId, message.channel, {
     type: 'message:delete',
@@ -446,6 +451,17 @@ router.get('/:id/channels/:channelId/voice-token', requireAuth, async (req: Auth
 
   const token = await at.toJwt();
   res.json({ token, url: livekitUrl });
+});
+
+router.get('/:id/audit-log', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const member = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!member || member.role !== 'owner') { res.status(403).json({ error: 'only the space owner can view the audit log' }); return; }
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const logs = await queries.getAuditLogs(spaceId, limit);
+  res.json(logs);
 });
 
 export default router;
