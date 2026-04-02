@@ -133,6 +133,15 @@ export interface ThreadData {
   replies: ThreadReplyData[];
 }
 
+export interface SpaceEmoji {
+  id: number;
+  space_id: number;
+  name: string;
+  image_url: string;
+  created_by: number;
+  created_at: number;
+}
+
 export const api = {
   register: (username: string, password: string, email?: string) =>
     post<AuthResponse>('/auth/register', { username, password, email }),
@@ -184,6 +193,9 @@ export const api = {
 
   getUnreadCounts: (token: string, spaceId: number) =>
     get<Record<string, number>>(`/spaces/${spaceId}/unread`, token),
+
+  getUserProfile: (token: string, userId: number) =>
+    get<UserProfile>(`/users/${userId}`, token),
 
   updateUserProfile: (token: string, userId: number, displayName: string | null) =>
     patch<UserProfile>(`/users/${userId}/profile`, { displayName }, token),
@@ -249,4 +261,13 @@ export const api = {
     if (!res.ok) throw new Error(data.error ?? 'Upload failed');
     return data;
   },
+
+  listSpaceEmoji: (token: string, spaceId: number) =>
+    get<SpaceEmoji[]>(`/spaces/${spaceId}/emoji`, token),
+
+  addSpaceEmoji: (token: string, spaceId: number, name: string, dataUrl: string) =>
+    post<SpaceEmoji>(`/spaces/${spaceId}/emoji`, { name, dataUrl }, token),
+
+  deleteSpaceEmoji: (token: string, spaceId: number, name: string) =>
+    del(`/spaces/${spaceId}/emoji/${encodeURIComponent(name)}`, token),
 };

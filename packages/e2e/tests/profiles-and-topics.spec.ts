@@ -116,6 +116,12 @@ test.describe('Channel topics', () => {
     await pageB.goto(inviteToken);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
 
+    // Reload User A so the members list includes User B (who just joined).
+    await pageA.reload();
+    await expect(pageA.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
+    await pageA.locator('.server-icon').first().click();
+    await expect(pageA.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+
     // User A opens a DM with User B
     await pageA.locator('.channel-add-btn[title="Start new DM"]').click();
     await pageA.locator('.channel-list .channel-item', { hasText: usernameB }).click();
@@ -138,7 +144,7 @@ test.describe('User profiles', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a message so there is a username to click
-    await page.locator('.compose input').fill('Profile click test');
+    await page.locator('.compose input:not([type="file"])').fill('Profile click test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Profile click test' })).toBeVisible({ timeout: 5_000 });
 
@@ -153,7 +159,7 @@ test.describe('User profiles', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a message so there's an own message with a clickable username
-    await page.locator('.compose input').fill('Own profile test');
+    await page.locator('.compose input:not([type="file"])').fill('Own profile test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Own profile test' })).toBeVisible({ timeout: 5_000 });
 
@@ -171,7 +177,7 @@ test.describe('User profiles', () => {
     await createSpace(page, `ProfEditSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Display name edit test');
+    await page.locator('.compose input:not([type="file"])').fill('Display name edit test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Display name edit test' })).toBeVisible({ timeout: 5_000 });
 
@@ -196,7 +202,7 @@ test.describe('User profiles', () => {
     await createSpace(page, `ProfCloseSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Close profile test');
+    await page.locator('.compose input:not([type="file"])').fill('Close profile test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Close profile test' })).toBeVisible({ timeout: 5_000 });
 
@@ -233,7 +239,7 @@ test.describe('User profiles', () => {
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message
-    await pageA.locator('.compose input').fill('Message from A');
+    await pageA.locator('.compose input:not([type="file"])').fill('Message from A');
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageB.locator('.msg-content', { hasText: 'Message from A' })).toBeVisible({ timeout: 5_000 });
 

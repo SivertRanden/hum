@@ -32,7 +32,15 @@ async function setupTwoUsersInSpace(browser: any) {
   await pageB.goto(inviteToken);
   await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
 
-  return { ctxA, pageA, usernameA, ctxB, pageB, usernameB };
+  // Reload User A's page so the members list includes User B (who just joined).
+  // Auth persists via localStorage; re-selecting the server triggers a fresh members fetch.
+  await pageA.reload();
+  await expect(pageA.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
+  await pageA.locator('.server-icon').first().click();
+  await expect(pageA.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+  await pageA.locator('.channel-item', { hasText: 'general' }).click();
+
+  return { ctxA, pageA, usernameA, ctxB, pageB, usernameB, spaceName };
 }
 
 test.describe('Direct Messages', () => {
@@ -68,7 +76,7 @@ test.describe('Direct Messages', () => {
 
     // User A sends a message
     const msgFromA = 'Hello from A!';
-    await pageA.locator('.compose input').fill(msgFromA);
+    await pageA.locator('.compose input:not([type="file"])').fill(msgFromA);
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageA.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 5_000 });
 
@@ -82,7 +90,7 @@ test.describe('Direct Messages', () => {
 
     // User B replies
     const msgFromB = 'Hello back from B!';
-    await pageB.locator('.compose input').fill(msgFromB);
+    await pageB.locator('.compose input:not([type="file"])').fill(msgFromB);
     await pageB.getByRole('button', { name: /^send$/i }).click();
     await expect(pageB.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 5_000 });
 
