@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember, DmChannel } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
-import { useLiveKitVoice } from './useLiveKitVoice.js';
+import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 
 import {
   Button,
@@ -393,12 +393,32 @@ interface VoiceRoomViewProps {
   roomId: string;
   isInRoom: boolean;
   isMuted: boolean;
+  isScreenSharing: boolean;
   participants: VoicePeer[];
+  remoteScreens: RemoteScreen[];
   myUserId: number;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
+  onStartScreenShare: () => void;
+  onStopScreenShare: () => void;
   joinError: string | null;
+}
+
+function ScreenView({ screen }: { screen: RemoteScreen }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    screen.track.attach(el);
+    return () => { screen.track.detach(el); };
+  }, [screen.track]);
+  return (
+    <div className="screen-share-view">
+      <div className="screen-share-label">{screen.username}'s screen</div>
+      <video ref={videoRef} autoPlay playsInline className="screen-share-video" />
+    </div>
+  );
 }
 
 function MicIcon({ muted }: { muted: boolean }) {
@@ -417,8 +437,8 @@ function MicIcon({ muted }: { muted: boolean }) {
 }
 
 function VoiceRoomView({
-  roomId, isInRoom, isMuted, participants, myUserId,
-  onJoin, onLeave, onToggleMute, joinError,
+  roomId, isInRoom, isMuted, isScreenSharing, participants, remoteScreens, myUserId,
+  onJoin, onLeave, onToggleMute, onStartScreenShare, onStopScreenShare, joinError,
 }: VoiceRoomViewProps) {
   const name = voiceRoomName(roomId);
 
@@ -454,6 +474,16 @@ function VoiceRoomView({
             <MicIcon muted={isMuted} />
             {isMuted ? 'Unmute' : 'Mute'}
           </button>
+          <button
+            className={`voice-ctrl-btn${isScreenSharing ? ' screen-sharing' : ''}`}
+            onClick={isScreenSharing ? onStopScreenShare : onStartScreenShare}
+            title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+            </svg>
+            {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+          </button>
           <button className="voice-ctrl-btn leave" onClick={onLeave} title="Leave voice">
             Leave
           </button>
@@ -476,6 +506,23 @@ function VoiceRoomView({
           ))
         )}
       </div>
+
+      {isScreenSharing && (
+        <div className="screen-share-self-indicator">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+          </svg>
+          You are sharing your screen
+        </div>
+      )}
+
+      {remoteScreens.length > 0 && (
+        <div className="screen-share-area">
+          {remoteScreens.map(screen => (
+            <ScreenView key={screen.userId} screen={screen} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -782,10 +829,14 @@ export default function App() {
   const {
     isInRoom,
     isMuted,
+    isScreenSharing,
     participants,
+    remoteScreens,
     join: joinVoice,
     leave: leaveVoice,
     toggleMute,
+    startScreenShare,
+    stopScreenShare,
     handleVoiceEvent,
   } = useLiveKitVoice({ send, spaceId: activeSpaceId, authToken: auth?.token ?? '' });
 
@@ -924,11 +975,15 @@ export default function App() {
                 roomId={activeChannelId}
                 isInRoom={isInRoom}
                 isMuted={isMuted}
+                isScreenSharing={isScreenSharing}
                 participants={participants}
+                remoteScreens={remoteScreens}
                 myUserId={auth.userId}
                 onJoin={handleJoinVoice}
                 onLeave={leaveVoice}
                 onToggleMute={toggleMute}
+                onStartScreenShare={startScreenShare}
+                onStopScreenShare={stopScreenShare}
                 joinError={joinError}
               />
             ) : (
