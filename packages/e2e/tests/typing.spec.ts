@@ -45,8 +45,8 @@ test.describe('Typing indicators', () => {
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User B starts typing — user A should see the indicator
-    await pageB.locator('.compose input[type="text"]').focus();
-    await pageB.locator('.compose input[type="text"]').type('Hello');
+    await pageB.locator('.compose input:not([type="file"])').focus();
+    await pageB.locator('.compose input:not([type="file"])').type('Hello');
 
     await expect(pageA.locator('.typing-indicator')).toBeVisible({ timeout: 5_000 });
     await expect(pageA.locator('.typing-indicator')).toContainText(usernameB);
@@ -85,7 +85,7 @@ test.describe('Typing indicators', () => {
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User B types and stops
-    await pageB.locator('.compose input[type="text"]').type('typing...');
+    await pageB.locator('.compose input:not([type="file"])').type('typing...');
     await expect(pageA.locator('.typing-indicator')).toBeVisible({ timeout: 5_000 });
 
     // Wait for 3s auto-stop timeout (server clears typing after 5s, client stops after 3s)
