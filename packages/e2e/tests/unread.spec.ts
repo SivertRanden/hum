@@ -63,7 +63,7 @@ test.describe('Unread indicators', () => {
     await expect(generalItem.locator('.unread-dot')).not.toBeVisible();
 
     // User B sends a message in general
-    await pageB.locator('.compose input').fill('Hey there!');
+    await pageB.locator('.compose input:not([type="file"])').fill('Hey there!');
     await pageB.getByRole('button', { name: /^send$/i }).click();
 
     // User A should now see the unread dot on the general channel item
@@ -100,7 +100,7 @@ test.describe('Unread indicators', () => {
 
     // Send three messages from B
     for (const msg of ['msg 1', 'msg 2', 'msg 3']) {
-      await pageB.locator('.compose input').fill(msg);
+      await pageB.locator('.compose input:not([type="file"])').fill(msg);
       await pageB.getByRole('button', { name: /^send$/i }).click();
     }
 
@@ -136,7 +136,7 @@ test.describe('Unread indicators', () => {
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageB.locator('.compose input').fill('Hello!');
+    await pageB.locator('.compose input:not([type="file"])').fill('Hello!');
     await pageB.getByRole('button', { name: /^send$/i }).click();
 
     const generalItem = pageA.locator('.channel-item', { hasText: 'general' });
@@ -173,7 +173,7 @@ test.describe('Unread indicators', () => {
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageB.locator('.compose input').fill('Persist me!');
+    await pageB.locator('.compose input:not([type="file"])').fill('Persist me!');
     await pageB.getByRole('button', { name: /^send$/i }).click();
 
     const generalItem = pageA.locator('.channel-item', { hasText: 'general' });
