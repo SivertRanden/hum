@@ -15,6 +15,13 @@
       "when": 1775076700000,
       "tag": "0001_add_last_read",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775100000000,
+      "tag": "0002_add_password_reset",
+      "breakpoints": true
     }
   ]
 }

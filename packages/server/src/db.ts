@@ -18,9 +18,19 @@ const IS_POSTGRES = DATABASE_URL.startsWith('postgres://') || DATABASE_URL.start
 export interface User {
   id: number;
   username: string;
+  email: string | null;
   password_hash: string;
   created_at: number;
   last_seen_at: number | null;
+}
+
+export interface PasswordResetToken {
+  id: number;
+  user_id: number;
+  token: string;
+  expires_at: number;
+  used_at: number | null;
+  created_at: number;
 }
 
 export interface Space {
@@ -77,7 +87,13 @@ export interface InviteToken {
 export interface Queries {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
-  createUser(username: string, password_hash: string): Promise<{ id: number }>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(username: string, password_hash: string, email?: string): Promise<{ id: number }>;
+  updateUserPassword(userId: number, password_hash: string): Promise<void>;
+
+  createPasswordResetToken(userId: number, token: string, expiresAt: number): Promise<void>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(token: string): Promise<void>;
 
   listSpaces(): Promise<Space[]>;
   getSpaceById(id: number): Promise<Space | undefined>;
@@ -112,7 +128,7 @@ export interface Queries {
 // ── SQLite driver ─────────────────────────────────────────────────────────────
 
 function buildSqliteQueries(): Queries {
-  const { users, spaces, channels, messages, space_members, invite_tokens } = sqliteSchema;
+  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens } = sqliteSchema;
 
   const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, '../../hum.db');
   const MIGRATIONS_FOLDER = path.join(__dirname, '../drizzle');
@@ -150,9 +166,30 @@ function buildSqliteQueries(): Queries {
     getUserById: async (id) =>
       db.select().from(users).where(eq(users.id, id)).get() as User | undefined,
 
-    createUser: async (username, password_hash) => {
-      const row = db.insert(users).values({ username, password_hash }).returning({ id: users.id }).get()!;
+    getUserByEmail: async (email) =>
+      db.select().from(users).where(eq(users.email, email)).get() as User | undefined,
+
+    createUser: async (username, password_hash, email?) => {
+      const row = db.insert(users).values({ username, password_hash, email: email ?? null }).returning({ id: users.id }).get()!;
       return { id: row.id };
+    },
+
+    updateUserPassword: async (userId, password_hash) => {
+      db.update(users).set({ password_hash }).where(eq(users.id, userId)).run();
+    },
+
+    createPasswordResetToken: async (userId, token, expiresAt) => {
+      db.insert(password_reset_tokens).values({ user_id: userId, token, expires_at: expiresAt }).run();
+    },
+
+    getPasswordResetToken: async (token) =>
+      db.select().from(password_reset_tokens).where(eq(password_reset_tokens.token, token)).get() as PasswordResetToken | undefined,
+
+    markPasswordResetTokenUsed: async (token) => {
+      db.update(password_reset_tokens)
+        .set({ used_at: nowEpoch })
+        .where(eq(password_reset_tokens.token, token))
+        .run();
     },
 
     listSpaces: async () =>
@@ -322,7 +359,7 @@ async function buildPgQueries(): Promise<Queries> {
   const postgres = postgresModule.default;
   const pgSchema = await import('./schema.pg.js');
 
-  const { users, spaces, channels, messages, space_members, invite_tokens } = pgSchema;
+  const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens } = pgSchema;
 
   const MIGRATIONS_FOLDER = path.join(__dirname, '../drizzle.pg');
 
@@ -348,9 +385,33 @@ async function buildPgQueries(): Promise<Queries> {
       return rows[0] as User | undefined;
     },
 
-    createUser: async (username, password_hash) => {
-      const rows = await db.insert(users).values({ username, password_hash }).returning({ id: users.id });
+    getUserByEmail: async (email) => {
+      const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      return rows[0] as User | undefined;
+    },
+
+    createUser: async (username, password_hash, email?) => {
+      const rows = await db.insert(users).values({ username, password_hash, email: email ?? null }).returning({ id: users.id });
       return { id: rows[0].id };
+    },
+
+    updateUserPassword: async (userId, password_hash) => {
+      await db.update(users).set({ password_hash }).where(eq(users.id, userId));
+    },
+
+    createPasswordResetToken: async (userId, token, expiresAt) => {
+      await db.insert(password_reset_tokens).values({ user_id: userId, token, expires_at: expiresAt });
+    },
+
+    getPasswordResetToken: async (token) => {
+      const rows = await db.select().from(password_reset_tokens).where(eq(password_reset_tokens.token, token)).limit(1);
+      return rows[0] as PasswordResetToken | undefined;
+    },
+
+    markPasswordResetTokenUsed: async (token) => {
+      await db.update(password_reset_tokens)
+        .set({ used_at: nowEpoch })
+        .where(eq(password_reset_tokens.token, token));
     },
 
     listSpaces: async () => {

@@ -75,11 +75,17 @@ export interface SpaceMember {
 }
 
 export const api = {
-  register: (username: string, password: string) =>
-    post<AuthResponse>('/auth/register', { username, password }),
+  register: (username: string, password: string, email?: string) =>
+    post<AuthResponse>('/auth/register', { username, password, email }),
 
   login: (username: string, password: string) =>
     post<AuthResponse>('/auth/login', { username, password }),
+
+  forgotPassword: (email: string) =>
+    post<{ message: string }>('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, password: string) =>
+    post<{ message: string }>('/auth/reset-password', { token, password }),
 
   listSpaces: (token: string) => get<Space[]>('/spaces', token),
 

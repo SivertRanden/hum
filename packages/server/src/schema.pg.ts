@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   username: text('username').notNull().unique(),
+  email: text('email').unique(),
   password_hash: text('password_hash').notNull(),
   created_at: integer('created_at').notNull().default(sql`extract(epoch from now())::int`),
   last_seen_at: integer('last_seen_at'),
@@ -59,6 +60,15 @@ export const invite_tokens = pgTable('invite_tokens', {
   expires_at: integer('expires_at'),
   uses: integer('uses').notNull().default(0),
   max_uses: integer('max_uses'),
+  created_at: integer('created_at').notNull().default(sql`extract(epoch from now())::int`),
+});
+
+export const password_reset_tokens = pgTable('password_reset_tokens', {
+  id: serial('id').primaryKey(),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  expires_at: integer('expires_at').notNull(),
+  used_at: integer('used_at'),
   created_at: integer('created_at').notNull().default(sql`extract(epoch from now())::int`),
 });
 
