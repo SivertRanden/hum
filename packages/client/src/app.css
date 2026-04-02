@@ -1293,3 +1293,174 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 2px;
   padding: 0 1px;
 }
+
+/* ── Settings dialog ─────────────────────────────────────────────────────── */
+.settings-dialog {
+  max-width: 460px !important;
+  width: 460px;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+  margin-bottom: 4px;
+}
+
+.settings-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 6px 12px 8px;
+  transition: color var(--hum-transition-fast), border-color var(--hum-transition-fast);
+}
+.settings-tab:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.settings-tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.settings-body {
+  min-height: 140px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.settings-row-hint {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.settings-notice {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.settings-link-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 0;
+  text-decoration: underline;
+}
+.settings-link-btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-dim);
+}
+
+/* Toggle switch */
+.settings-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background var(--hum-transition-fast);
+}
+.settings-toggle:hover:not(:disabled) {
+  background: var(--text-dim);
+}
+.settings-toggle[data-checked="true"] {
+  background: var(--accent);
+}
+.settings-toggle[data-checked="true"]:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+.settings-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform var(--hum-transition-fast);
+}
+.settings-toggle[data-checked="true"] .settings-toggle-thumb {
+  transform: translateX(16px);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.settings-select {
+  appearance: none;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.875rem;
+  padding: 8px 10px;
+  width: 100%;
+  cursor: pointer;
+}
+.settings-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Settings gear button in sidebar footer */
+.user-settings-btn {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  transition: color var(--hum-transition-fast), background var(--hum-transition-fast);
+}
+.user-settings-btn:hover:not(:disabled) {
+  background: var(--surface2);
+  color: var(--text);
+}

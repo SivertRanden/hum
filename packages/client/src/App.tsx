@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember, DmChannel, SearchResult } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
+import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
 
 import {
   Button,
@@ -635,6 +636,17 @@ export default function App() {
 
   const [authView, setAuthView] = useState<'login' | 'forgot'>(() => 'login');
 
+  const [settings, setSettings] = useState<HumSettings>(() => {
+    const stored = localStorage.getItem('hum_settings');
+    return stored ? { ...DEFAULT_SETTINGS, ...(JSON.parse(stored) as Partial<HumSettings>) } : DEFAULT_SETTINGS;
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
+  const handleSettingsChange = useCallback((next: HumSettings) => {
+    localStorage.setItem('hum_settings', JSON.stringify(next));
+    setSettings(next);
+  }, []);
+
   // Check for password reset token in URL
   const resetToken = new URLSearchParams(window.location.search).get('reset_token');
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -672,6 +684,11 @@ export default function App() {
     localStorage.removeItem('hum_auth');
     setAuth(null);
   };
+
+  // Apply theme to document root
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme;
+  }, [settings.theme]);
 
   // Request browser notification permission once authenticated
   useEffect(() => {
@@ -888,13 +905,14 @@ export default function App() {
   }, []);
 
   const onMention = useCallback((event: MentionEvent) => {
+    if (!settings.notifyOnMention) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     const { message } = event;
     new Notification(`${message.username} mentioned you in #${message.channelId}`, {
       body: message.content,
       tag: `mention-${message.id}`,
     });
-  }, []);
+  }, [settings.notifyOnMention]);
 
   // Clear typing state when switching channels or spaces
   useEffect(() => {
@@ -961,7 +979,7 @@ export default function App() {
     startScreenShare,
     stopScreenShare,
     handleVoiceEvent,
-  } = useLiveKitVoice({ send, spaceId: activeSpaceId, authToken: auth?.token ?? '' });
+  } = useLiveKitVoice({ send, spaceId: activeSpaceId, authToken: auth?.token ?? '', micDeviceId: settings.micDeviceId });
 
   const handleJoinVoice = async () => {
     setJoinError(null);
@@ -1061,6 +1079,7 @@ export default function App() {
         onSelectChannel={handleSelectChannel}
         username={auth.username}
         onSignOut={handleSignOut}
+        onOpenSettings={() => setShowSettings(true)}
         channels={channels}
         onCreateChannel={handleCreateChannel}
         onDeleteChannel={handleDeleteChannel}
@@ -1189,6 +1208,13 @@ export default function App() {
           <div className="pick-space">Select a server to start talking</div>
         )}
       </div>
+
+      <UserSettingsDialog
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        settings={settings}
+        onSettingsChange={handleSettingsChange}
+      />
 
       <Dialog open={showCreateSpace} onOpenChange={setShowCreateSpace}>
         <DialogContent>

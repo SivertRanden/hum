@@ -6,6 +6,7 @@ interface UseLiveKitVoiceOptions {
   send: (data: unknown) => void;
   spaceId: number | null;
   authToken: string;
+  micDeviceId?: string | null;
 }
 
 export interface RemoteScreen {
@@ -29,7 +30,7 @@ export interface UseLiveKitVoiceReturn {
   handleVoiceEvent: (event: VoiceServerEvent) => void;
 }
 
-export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOptions): UseLiveKitVoiceReturn {
+export function useLiveKitVoice({ send, spaceId, authToken, micDeviceId }: UseLiveKitVoiceOptions): UseLiveKitVoiceReturn {
   const [isInRoom, setIsInRoom] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -40,6 +41,8 @@ export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOpt
   const roomRef = useRef<Room | null>(null);
   const spaceIdRef = useRef(spaceId);
   spaceIdRef.current = spaceId;
+  const micDeviceIdRef = useRef(micDeviceId);
+  micDeviceIdRef.current = micDeviceId;
   const activeRoomIdRef = useRef<string | null>(null);
   activeRoomIdRef.current = activeRoomId;
   const isMutedRef = useRef(isMuted);
@@ -81,6 +84,9 @@ export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOpt
     });
 
     await room.connect(url, token);
+    if (micDeviceIdRef.current) {
+      await room.switchActiveDevice('audioinput', micDeviceIdRef.current);
+    }
     await room.localParticipant.setMicrophoneEnabled(true);
 
     setIsInRoom(true);
