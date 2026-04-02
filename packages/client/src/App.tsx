@@ -222,6 +222,8 @@ function PinIcon({ size = 14 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
     </svg>
+  );
+}
 
 // ── Link preview card ─────────────────────────────────────────────────────────
 
@@ -302,8 +304,6 @@ interface MessageListProps {
   onToggleReaction: (messageId: number, emoji: string) => void;
   linkPreviews: Record<number, LinkPreview[]>;
   onOpenThread: (msg: HumMessage) => void;
-}
-
   onPinToggle: (id: number, pinned: boolean) => void;
 }
 
@@ -414,7 +414,6 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
                   ))}
                 </div>
               )}
-              <span className="msg-actions">
               <span className="msg-actions">
                 <button
                   className={`msg-action-btn msg-action-pin${m.pinnedAt ? ' active' : ''}`}
@@ -1300,7 +1299,6 @@ export default function App() {
                   </span>
                 )
               )}
-              <button
               {!inVoice && !inDm && (
                 <button
                   className={`header-pin-btn${showPinnedPanel ? ' active' : ''}`}
@@ -1310,6 +1308,7 @@ export default function App() {
                   <PinIcon size={16} />
                 </button>
               )}
+              <button
                 className="header-search-btn"
                 onClick={() => setShowSearch(true)}
                 aria-label="Search messages"
@@ -1368,6 +1367,7 @@ export default function App() {
                     onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
                     linkPreviews={msgLinkPreviews}
                     onOpenThread={setOpenThread}
+                    onPinToggle={handlePinToggle}
                   />
                   {typingUsers.size > 0 && (
                     <div className="typing-indicator">
