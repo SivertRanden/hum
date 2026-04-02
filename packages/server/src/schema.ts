@@ -37,6 +37,7 @@ export const messages = sqliteTable('messages', {
   user_id: integer('user_id').notNull().references(() => users.id),
   channel: text('channel').notNull().default('general'),
   content: text('content').notNull(),
+  link_previews: text('link_previews'),
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
   updated_at: integer('updated_at'),
   deleted_at: integer('deleted_at'),

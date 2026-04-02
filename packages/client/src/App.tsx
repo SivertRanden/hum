@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember, DmChannel } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice } from './useLiveKitVoice.js';
 
 import {
@@ -214,6 +214,24 @@ function renderMessageContent(content: string, myUsername: string): React.ReactN
   });
 }
 
+// ── Link preview card ─────────────────────────────────────────────────────────
+
+function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
+  return (
+    <a className="link-preview" href={preview.url} target="_blank" rel="noopener noreferrer">
+      {preview.image && (
+        <img className="link-preview-image" src={preview.image} alt="" loading="lazy" />
+      )}
+      <div className="link-preview-body">
+        {preview.siteName && <span className="link-preview-site">{preview.siteName}</span>}
+        {preview.title && <span className="link-preview-title">{preview.title}</span>}
+        {preview.description && <span className="link-preview-description">{preview.description}</span>}
+        <span className="link-preview-url">{preview.url}</span>
+      </div>
+    </a>
+  );
+}
+
 // ── Reaction pills ────────────────────────────────────────────────────────────
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
@@ -272,9 +290,10 @@ interface MessageListProps {
   onDeleteMessage: (id: number) => void;
   reactions: Record<number, ReactionGroup[]>;
   onToggleReaction: (messageId: number, emoji: string) => void;
+  linkPreviews: Record<number, LinkPreview[]>;
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage, reactions, onToggleReaction }: MessageListProps) {
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -345,6 +364,9 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onE
                 {renderMessageContent(m.content, myUsername)}
                 {m.editedAt && <span className="msg-edited"> (edited)</span>}
               </span>
+              {(linkPreviews[m.id] ?? m.linkPreviews ?? []).map((preview, i) => (
+                <LinkPreviewCard key={i} preview={preview} />
+              ))}
               {m.userId === myUserId && (
                 <span className="msg-actions">
                   <button className="msg-action-btn" onClick={() => startEdit(m)} title="Edit">✎</button>
@@ -485,6 +507,7 @@ export default function App() {
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
   const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
+  const [msgLinkPreviews, setMsgLinkPreviews] = useState<Record<number, LinkPreview[]>>({});
   const [dms, setDms] = useState<DmChannel[]>([]);
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
@@ -603,6 +626,7 @@ export default function App() {
     if (!isVoiceChannel(id)) {
       setMessages([]);
       setReactions({});
+      setMsgLinkPreviews({});
       // Clear unread for this channel
       setUnreadCounts(prev => {
         const next = new Map(prev);
@@ -676,6 +700,11 @@ export default function App() {
     });
   }, []);
 
+  const onLinkPreview = useCallback((event: LinkPreviewEvent) => {
+    const { messageId, previews } = event.linkPreview;
+    setMsgLinkPreviews(prev => ({ ...prev, [messageId]: previews }));
+  }, []);
+
   const onMessageEdit = useCallback((msg: HumMessage) => {
     setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: msg.content, editedAt: msg.editedAt } : m));
   }, []);
@@ -745,6 +774,7 @@ export default function App() {
           onMention,
           onChannelNewMessage,
           onReaction,
+          onLinkPreview,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -913,6 +943,7 @@ export default function App() {
                   onDeleteMessage={handleDeleteMessage}
                   reactions={reactions}
                   onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
+                  linkPreviews={msgLinkPreviews}
                 />
                 {typingUsers.size > 0 && (
                   <div className="typing-indicator">
