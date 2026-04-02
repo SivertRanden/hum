@@ -128,6 +128,19 @@ export const message_attachments = pgTable('message_attachments', {
   index('idx_attachments_message').on(table.message_id),
 ]);
 
+export const audit_logs = pgTable('audit_logs', {
+  id: serial('id').primaryKey(),
+  space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  target_type: text('target_type'),
+  target_id: integer('target_id'),
+  meta: text('meta'),
+  created_at: integer('created_at').notNull().default(sql`extract(epoch from now())::int`),
+}, (table) => [
+  index('idx_audit_logs_space').on(table.space_id, table.created_at),
+]);
+
 export const thread_replies = pgTable('thread_replies', {
   id: serial('id').primaryKey(),
   parent_message_id: integer('parent_message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
