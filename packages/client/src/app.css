@@ -1924,3 +1924,103 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .admin-member-info { flex: 1; display: flex; align-items: center; gap: 8px; }
 .admin-member-name { color: var(--text, #fff); font-size: 0.88rem; font-weight: 500; }
 .admin-member-joined { color: var(--text-dim, #888); font-size: 0.75rem; margin-left: auto; }
+
+/* ── Custom emoji ─────────────────────────────────────────────────────────── */
+.custom-emoji-inline {
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  vertical-align: -0.3em;
+  object-fit: contain;
+}
+
+.emoji-manager {
+  min-width: 340px;
+  max-width: 480px;
+}
+
+.emoji-manager-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.emoji-name-input {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.emoji-file-input {
+  flex: 1.5;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.emoji-upload-btn {
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: none;
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.emoji-upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.emoji-error {
+  color: #f87171;
+  font-size: 0.82rem;
+  padding: 4px 14px;
+}
+
+.emoji-empty {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 12px 14px;
+}
+
+.emoji-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 0;
+}
+
+.emoji-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+}
+.emoji-row:hover { background: var(--surface2); }
+
+.emoji-preview {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.emoji-row-name {
+  flex: 1;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.emoji-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.emoji-delete-btn:hover { background: rgba(248, 113, 113, 0.15); color: #f87171; }

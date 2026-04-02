@@ -154,6 +154,14 @@ export interface PendingNotification {
   space_id: number;
   space_name: string;
   channel: string;
+}
+
+export interface SpaceEmoji {
+  id: number;
+  space_id: number;
+  name: string;
+  image_url: string;
+  created_by: number;
   created_at: number;
 }
 
@@ -229,6 +237,9 @@ export interface Queries {
   insertAttachment(filename: string, storage_key: string, mime_type: string, size: number): Promise<{ id: number }>;
   linkAttachmentToMessage(attachment_id: number, message_id: number): Promise<void>;
   getAttachmentsForMessages(message_ids: number[]): Promise<Record<number, Attachment[]>>;
+  addSpaceEmoji(space_id: number, name: string, image_url: string, created_by: number): Promise<SpaceEmoji>;
+  listSpaceEmoji(space_id: number): Promise<SpaceEmoji[]>;
+  deleteSpaceEmoji(space_id: number, name: string): Promise<void>;
 }
 
 export interface SearchResult {
@@ -830,6 +841,27 @@ function buildSqliteQueries(): Queries {
       return { id: row.id, reply_count: parent?.reply_count ?? 0 };
     },
 
+    addSpaceEmoji: async (space_id, name, image_url, created_by) => {
+      const { space_emoji } = sqliteSchema;
+      const row = db.insert(space_emoji).values({ space_id, name, image_url, created_by }).returning().get()!;
+      return row as SpaceEmoji;
+    },
+
+    listSpaceEmoji: async (space_id) => {
+      const { space_emoji } = sqliteSchema;
+      return db.select().from(space_emoji)
+        .where(eq(space_emoji.space_id, space_id))
+        .orderBy(asc(space_emoji.name))
+        .all() as SpaceEmoji[];
+    },
+
+    deleteSpaceEmoji: async (space_id, name) => {
+      const { space_emoji } = sqliteSchema;
+      db.delete(space_emoji)
+        .where(and(eq(space_emoji.space_id, space_id), eq(space_emoji.name, name)))
+        .run();
+    },
+
     logAudit: async (space_id, user_id, action, target_type = null, target_id = null, meta = null) => {
       const { audit_logs } = sqliteSchema;
       db.insert(audit_logs).values({ space_id, user_id, action, target_type, target_id, meta }).run();
@@ -1344,6 +1376,25 @@ async function buildPgQueries(): Promise<Queries> {
       const parentRows = await db.select({ reply_count: messages.reply_count })
         .from(messages).where(eq(messages.id, parent_message_id)).limit(1);
       return { id: rows[0].id, reply_count: parentRows[0]?.reply_count ?? 0 };
+    },
+
+    addSpaceEmoji: async (space_id, name, image_url, created_by) => {
+      const { space_emoji } = pgSchema;
+      const rows = await db.insert(space_emoji).values({ space_id, name, image_url, created_by }).returning();
+      return rows[0] as SpaceEmoji;
+    },
+
+    listSpaceEmoji: async (space_id) => {
+      const { space_emoji } = pgSchema;
+      return db.select().from(space_emoji)
+        .where(eq(space_emoji.space_id, space_id))
+        .orderBy(asc(space_emoji.name)) as Promise<SpaceEmoji[]>;
+    },
+
+    deleteSpaceEmoji: async (space_id, name) => {
+      const { space_emoji } = pgSchema;
+      await db.delete(space_emoji)
+        .where(and(eq(space_emoji.space_id, space_id), eq(space_emoji.name, name)));
     },
 
     logAudit: async (space_id, user_id, action, target_type = null, target_id = null, meta = null) => {
