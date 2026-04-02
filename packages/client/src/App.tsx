@@ -15,6 +15,7 @@ import {
 } from './components/ui/index.js';
 import { ServerRail } from './components/ServerRail.js';
 import { ChannelSidebar } from './components/ChannelSidebar.js';
+import { ThreadPanel } from './components/ThreadPanel.js';
 import './app.css';
 
 interface AuthState {
@@ -287,14 +288,16 @@ interface MessageListProps {
   myUsername: string;
   token: string;
   activeSpaceId: number | null;
+  openThreadMessageId: number | null;
   onEditMessage: (id: number, content: string) => void;
   onDeleteMessage: (id: number) => void;
   reactions: Record<number, ReactionGroup[]>;
   onToggleReaction: (messageId: number, emoji: string) => void;
   linkPreviews: Record<number, LinkPreview[]>;
+  onOpenThread: (msg: HumMessage) => void;
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews }: MessageListProps) {
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews, onOpenThread }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -385,11 +388,22 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onE
                   ))}
                 </div>
               )}
-              {m.userId === myUserId && (
-                <span className="msg-actions">
-                  <button className="msg-action-btn" onClick={() => startEdit(m)} title="Edit">✎</button>
-                  <button className="msg-action-btn msg-action-delete" onClick={() => void handleDelete(m)} title="Delete">✕</button>
-                </span>
+              <span className="msg-actions">
+                <button className="msg-action-btn msg-action-reply" onClick={() => onOpenThread(m)} title="Reply in thread">↩</button>
+                {m.userId === myUserId && (
+                  <>
+                    <button className="msg-action-btn" onClick={() => startEdit(m)} title="Edit">✎</button>
+                    <button className="msg-action-btn msg-action-delete" onClick={() => void handleDelete(m)} title="Delete">✕</button>
+                  </>
+                )}
+              </span>
+              {(m.replyCount ?? 0) > 0 && (
+                <button
+                  className={`msg-reply-count${openThreadMessageId === m.id ? ' active' : ''}`}
+                  onClick={() => onOpenThread(m)}
+                >
+                  {m.replyCount} {m.replyCount === 1 ? 'reply' : 'replies'}
+                </button>
               )}
               <ReactionPills
                 reactions={reactions[m.id] ?? []}
@@ -671,6 +685,7 @@ export default function App() {
   const [activeChannelId, setActiveChannelId] = useState<string>(DEFAULT_CHANNEL);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<HumMessage[]>([]);
+  const [openThread, setOpenThread] = useState<HumMessage | null>(null);
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [input, setInput] = useState('');
   const [pendingAttachment, setPendingAttachment] = useState<{ id: number; url: string; filename: string; mimeType: string; size: number } | null>(null);
@@ -768,6 +783,7 @@ export default function App() {
     setMobileView('channels');
     setReactions({});
     setDms([]);
+    setOpenThread(null);
   };
 
   const handleOpenDm = async (targetUserId: number) => {
@@ -909,6 +925,10 @@ export default function App() {
 
   const handleEditMessage = useCallback((id: number, content: string) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content, editedAt: Math.floor(Date.now() / 1000) } : m));
+  }, []);
+
+  const handleReplyCountUpdate = useCallback((messageId: number, replyCount: number) => {
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, replyCount } : m));
   }, []);
 
   const handleDeleteMessage = useCallback((id: number) => {
@@ -1233,11 +1253,13 @@ export default function App() {
                   myUsername={auth.username}
                   token={auth.token}
                   activeSpaceId={activeSpaceId}
+                  openThreadMessageId={openThread?.id ?? null}
                   onEditMessage={handleEditMessage}
                   onDeleteMessage={handleDeleteMessage}
                   reactions={reactions}
                   onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
                   linkPreviews={msgLinkPreviews}
+                  onOpenThread={setOpenThread}
                 />
                 {typingUsers.size > 0 && (
                   <div className="typing-indicator">
@@ -1291,6 +1313,18 @@ export default function App() {
         settings={settings}
         onSettingsChange={handleSettingsChange}
       />
+
+      {openThread && auth && activeSpaceId && (
+        <ThreadPanel
+          token={auth.token}
+          spaceId={activeSpaceId}
+          message={openThread}
+          myUserId={auth.userId}
+          myUsername={auth.username}
+          onClose={() => setOpenThread(null)}
+          onReplyCountUpdate={handleReplyCountUpdate}
+        />
+      )}
 
       <Dialog open={showCreateSpace} onOpenChange={setShowCreateSpace}>
         <DialogContent>

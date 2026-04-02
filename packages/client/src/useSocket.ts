@@ -34,6 +34,7 @@ export interface HumMessage {
   reactions?: ReactionGroup[];
   linkPreviews?: LinkPreview[];
   attachments?: MessageAttachment[];
+  replyCount?: number;
 }
 
 export interface ReactionEvent {

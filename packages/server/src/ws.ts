@@ -57,6 +57,7 @@ interface ServerMessage {
     reactions?: ReactionGroup[];
     attachments?: { id: number; filename: string; url: string; mimeType: string; size: number }[];
     linkPreviews?: LinkPreview[];
+    replyCount?: number;
   };
   messages?: ServerMessage['message'][];
   messageId?: number;
@@ -323,6 +324,7 @@ export function createWsServer(server: import('http').Server) {
             editedAt: m.updated_at ?? undefined,
             reactions: grouped.length > 0 ? grouped : undefined,
             linkPreviews,
+            replyCount: m.reply_count ?? 0,
           };
         });
 

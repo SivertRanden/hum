@@ -383,6 +383,40 @@ router.delete('/:id/messages/:messageId/reactions/:emoji', requireAuth, async (r
   res.status(204).end();
 });
 
+// ── Thread replies ────────────────────────────────────────────────────────────
+
+router.get('/:id/messages/:messageId/thread', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const thread = await queries.getThread(spaceId, messageId);
+  if (!thread) { res.status(404).json({ error: 'message not found' }); return; }
+
+  res.json(thread);
+});
+
+router.post('/:id/messages/:messageId/thread/replies', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+  const { content } = req.body as { content?: string };
+
+  if (!content?.trim()) { res.status(400).json({ error: 'content required' }); return; }
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const parent = await queries.getMessageById(messageId);
+  if (!parent || parent.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const { id, reply_count } = await queries.insertThreadReply(messageId, spaceId, req.user!.userId, parent.channel, content.trim());
+  const now = Math.floor(Date.now() / 1000);
+
+  res.status(201).json({ id, parent_message_id: messageId, space_id: spaceId, user_id: req.user!.userId, channel: parent.channel, content: content.trim(), created_at: now, updated_at: null, deleted_at: null, reply_count });
+});
+
 // ── LiveKit voice token ────────────────────────────────────────────────────────
 
 router.get('/:id/channels/:channelId/voice-token', requireAuth, async (req: AuthRequest, res: Response) => {
