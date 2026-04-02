@@ -2,7 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import rateLimit from 'express-rate-limit';
-import { initDb } from './db.js';
+import { initDb, queries } from './db.js';
+import { sendDigestEmail } from './email.js';
 import authRouter from './routes/auth.js';
 import spacesRouter from './routes/spaces.js';
 import invitesRouter from './routes/invites.js';
@@ -52,10 +53,48 @@ app.use('/api/invite', apiLimiter, invitesRouter);
 const server = createServer(app);
 createWsServer(server);
 
+// ── Email digest runner ────────────────────────────────────────────────────────
+// Runs every 5 minutes; groups pending notifications by user and sends one email per user.
+
+const DIGEST_INTERVAL_MS = 5 * 60 * 1000;
+
+async function runDigest() {
+  try {
+    const pending = await queries.getPendingNotifications();
+    if (pending.length === 0) return;
+
+    // Group by user
+    const byUser = new Map<number, typeof pending>();
+    for (const n of pending) {
+      if (!byUser.has(n.user_id)) byUser.set(n.user_id, []);
+      byUser.get(n.user_id)!.push(n);
+    }
+
+    const sentIds: number[] = [];
+    for (const [, notifs] of byUser) {
+      const { email, username } = notifs[0];
+      try {
+        await sendDigestEmail(email, username, notifs);
+        sentIds.push(...notifs.map(n => n.id));
+      } catch (err) {
+        console.error('[digest] failed to send email to', email, err);
+      }
+    }
+
+    if (sentIds.length > 0) {
+      await queries.markNotificationsSent(sentIds);
+      console.log(`[digest] sent ${sentIds.length} notification(s) to ${byUser.size} user(s)`);
+    }
+  } catch (err) {
+    console.error('[digest] runner error:', err);
+  }
+}
+
 initDb().then(() => {
   server.listen(PORT, () => {
     console.log(`[hum] server listening on http://localhost:${PORT}`);
   });
+  setInterval(() => { void runDigest(); }, DIGEST_INTERVAL_MS);
 }).catch((err) => {
   console.error('[hum] failed to initialize database:', err);
   process.exit(1);

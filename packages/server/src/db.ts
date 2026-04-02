@@ -109,6 +109,20 @@ export interface DmChannel {
   is_online?: boolean;
 }
 
+export interface PendingNotification {
+  id: number;
+  user_id: number;
+  email: string;
+  username: string;
+  message_id: number;
+  message_content: string;
+  sender_username: string;
+  space_id: number;
+  space_name: string;
+  channel: string;
+  created_at: number;
+}
+
 // ── Unified async Queries interface ───────────────────────────────────────────
 
 export interface Queries {
@@ -164,6 +178,10 @@ export interface Queries {
   isUserDmMember(channel_id: number, user_id: number): Promise<boolean>;
 
   searchMessages(space_id: number, query: string, channel: string | null, limit: number): Promise<SearchResult[]>;
+
+  enqueueNotification(user_id: number, message_id: number, space_id: number, channel: string): Promise<void>;
+  getPendingNotifications(): Promise<PendingNotification[]>;
+  markNotificationsSent(ids: number[]): Promise<void>;
 }
 
 export interface SearchResult {
@@ -545,6 +563,35 @@ function buildSqliteQueries(): Queries {
       } catch { return []; }
     },
 
+    enqueueNotification: async (user_id, message_id, space_id, channel) => {
+      rawDb.prepare(
+        'INSERT INTO notification_queue (user_id, message_id, space_id, channel) VALUES (?, ?, ?, ?)'
+      ).run(user_id, message_id, space_id, channel);
+    },
+
+    getPendingNotifications: async () => {
+      return rawDb.prepare(`
+        SELECT nq.id, nq.user_id, u.email, u.username,
+               nq.message_id, m.content as message_content,
+               su.username as sender_username,
+               nq.space_id, s.name as space_name,
+               nq.channel, nq.created_at
+        FROM notification_queue nq
+        JOIN users u ON nq.user_id = u.id
+        JOIN messages m ON nq.message_id = m.id
+        JOIN users su ON m.user_id = su.id
+        JOIN spaces s ON nq.space_id = s.id
+        WHERE nq.sent_at IS NULL AND u.email IS NOT NULL
+        ORDER BY nq.created_at ASC
+      `).all() as PendingNotification[];
+    },
+
+    markNotificationsSent: async (ids) => {
+      if (ids.length === 0) return;
+      const placeholders = ids.map(() => '?').join(',');
+      rawDb.prepare(`UPDATE notification_queue SET sent_at = unixepoch() WHERE id IN (${placeholders})`).run(...ids);
+    },
+
   };
 }
 
@@ -897,6 +944,39 @@ async function buildPgQueries(): Promise<Queries> {
         LIMIT ${limit}
       `;
       return rows;
+    },
+
+    enqueueNotification: async (user_id, message_id, space_id, channel) => {
+      await appClient`
+        INSERT INTO notification_queue (user_id, message_id, space_id, channel)
+        VALUES (${user_id}, ${message_id}, ${space_id}, ${channel})
+      `;
+    },
+
+    getPendingNotifications: async () => {
+      const rows = await appClient<PendingNotification[]>`
+        SELECT nq.id, nq.user_id, u.email, u.username,
+               nq.message_id, m.content as message_content,
+               su.username as sender_username,
+               nq.space_id, s.name as space_name,
+               nq.channel, nq.created_at
+        FROM notification_queue nq
+        JOIN users u ON nq.user_id = u.id
+        JOIN messages m ON nq.message_id = m.id
+        JOIN users su ON m.user_id = su.id
+        JOIN spaces s ON nq.space_id = s.id
+        WHERE nq.sent_at IS NULL AND u.email IS NOT NULL
+        ORDER BY nq.created_at ASC
+      `;
+      return rows;
+    },
+
+    markNotificationsSent: async (ids) => {
+      if (ids.length === 0) return;
+      await appClient`
+        UPDATE notification_queue SET sent_at = extract(epoch from now())::int
+        WHERE id = ANY(${ids})
+      `;
     },
 
   };

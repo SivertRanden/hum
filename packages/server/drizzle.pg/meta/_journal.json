@@ -50,6 +50,13 @@
       "when": 1775120000000,
       "tag": "0006_add_link_previews",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775125000000,
+      "tag": "0007_add_notification_queue",
+      "breakpoints": true
     }
   ]
 }
