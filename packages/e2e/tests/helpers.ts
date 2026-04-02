@@ -10,7 +10,7 @@ export async function register(page: Page, username: string, password = 'testpas
   await page.goto('/');
   await page.getByRole('button', { name: /no account\? register/i }).click();
   await page.getByPlaceholder('username').fill(username);
-  await page.getByPlaceholder('password').fill(password);
+  await page.getByPlaceholder('password', { exact: true }).fill(password);
   await page.getByRole('button', { name: /create account/i }).click();
   await expect(page.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
 }
@@ -19,7 +19,7 @@ export async function register(page: Page, username: string, password = 'testpas
 export async function login(page: Page, username: string, password = 'testpass123') {
   await page.goto('/');
   await page.getByPlaceholder('username').fill(username);
-  await page.getByPlaceholder('password').fill(password);
+  await page.getByPlaceholder('password', { exact: true }).fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
 }

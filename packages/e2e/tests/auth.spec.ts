@@ -33,7 +33,7 @@ test.describe('Authentication', () => {
   test('shows error for wrong credentials', async ({ page }) => {
     await page.goto('/');
     await page.getByPlaceholder('username').fill('nobody_xyz_9999');
-    await page.getByPlaceholder('password').fill('wrongpass');
+    await page.getByPlaceholder('password', { exact: true }).fill('wrongpass');
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page.locator('.error')).toBeVisible({ timeout: 5_000 });
   });
