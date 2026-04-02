@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Room, RoomEvent } from 'livekit-client';
+import { Room, RoomEvent, Track, RemoteVideoTrack } from 'livekit-client';
 import { VoicePeer, VoiceServerEvent } from './useSocket.js';
 
 interface UseLiveKitVoiceOptions {
@@ -8,22 +8,34 @@ interface UseLiveKitVoiceOptions {
   authToken: string;
 }
 
+export interface RemoteScreen {
+  userId: number;
+  username: string;
+  track: RemoteVideoTrack;
+}
+
 export interface UseLiveKitVoiceReturn {
   isInRoom: boolean;
   isMuted: boolean;
+  isScreenSharing: boolean;
   participants: VoicePeer[];
   activeRoomId: string | null;
+  remoteScreens: RemoteScreen[];
   join: (channelId: string) => Promise<void>;
   leave: () => void;
   toggleMute: () => void;
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => void;
   handleVoiceEvent: (event: VoiceServerEvent) => void;
 }
 
 export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOptions): UseLiveKitVoiceReturn {
   const [isInRoom, setIsInRoom] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [participants, setParticipants] = useState<VoicePeer[]>([]);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [remoteScreens, setRemoteScreens] = useState<RemoteScreen[]>([]);
 
   const roomRef = useRef<Room | null>(null);
   const spaceIdRef = useRef(spaceId);
@@ -49,6 +61,25 @@ export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOpt
     const room = new Room();
     roomRef.current = room;
 
+    // Listen for remote screen share tracks
+    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+      if (track.source === Track.Source.ScreenShare && track instanceof RemoteVideoTrack) {
+        const userId = parseInt(participant.identity, 10);
+        const username = participant.name ?? participant.identity;
+        setRemoteScreens(prev => [
+          ...prev.filter(s => s.userId !== userId),
+          { userId, username, track },
+        ]);
+      }
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+      if (track.source === Track.Source.ScreenShare) {
+        const userId = parseInt(participant.identity, 10);
+        setRemoteScreens(prev => prev.filter(s => s.userId !== userId));
+      }
+    });
+
     await room.connect(url, token);
     await room.localParticipant.setMicrophoneEnabled(true);
 
@@ -71,8 +102,10 @@ export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOpt
 
     setIsInRoom(false);
     setIsMuted(false);
+    setIsScreenSharing(false);
     setParticipants([]);
     setActiveRoomId(null);
+    setRemoteScreens([]);
   }, [send]);
 
   const toggleMute = useCallback(() => {
@@ -81,6 +114,20 @@ export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOpt
     const newMuted = !isMutedRef.current;
     void room.localParticipant.setMicrophoneEnabled(!newMuted);
     setIsMuted(newMuted);
+  }, []);
+
+  const startScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room) return;
+    await room.localParticipant.setScreenShareEnabled(true);
+    setIsScreenSharing(true);
+  }, []);
+
+  const stopScreenShare = useCallback(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    void room.localParticipant.setScreenShareEnabled(false);
+    setIsScreenSharing(false);
   }, []);
 
   // Handle WS voice presence events (used for sidebar participant list)
@@ -96,8 +143,8 @@ export function useLiveKitVoice({ send, spaceId, authToken }: UseLiveKitVoiceOpt
     };
   }, []);
 
-  // Suppress unused import warning for RoomEvent - it may be used in future event handlers
-  void RoomEvent;
-
-  return { isInRoom, isMuted, participants, activeRoomId, join, leave, toggleMute, handleVoiceEvent };
+  return {
+    isInRoom, isMuted, isScreenSharing, participants, activeRoomId, remoteScreens,
+    join, leave, toggleMute, startScreenShare, stopScreenShare, handleVoiceEvent,
+  };
 }

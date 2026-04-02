@@ -603,6 +603,47 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .voice-ctrl-btn.muted:hover { background: color-mix(in srgb, var(--red) 15%, transparent); }
 .voice-ctrl-btn.leave { color: var(--red); }
 .voice-ctrl-btn.leave:hover { background: color-mix(in srgb, var(--red) 15%, transparent); }
+.voice-ctrl-btn.screen-sharing { color: var(--hum-success); border-color: var(--hum-success); }
+.voice-ctrl-btn.screen-sharing:hover { background: color-mix(in srgb, var(--hum-success) 15%, transparent); }
+
+/* ── Screen sharing ─────────────────────────────────────────────────────────── */
+.screen-share-self-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 20px;
+  font-size: 0.75rem;
+  color: var(--hum-success);
+}
+
+.screen-share-area {
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.screen-share-view {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.screen-share-label {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.screen-share-video {
+  width: 100%;
+  display: block;
+  background: #000;
+  max-height: 400px;
+  object-fit: contain;
+}
 
 /* ── Voice participants (main area) ─────────────────────────────────────────── */
 .voice-participants {
