@@ -59,6 +59,7 @@ export interface Channel {
   space_id: number;
   name: string;
   type: 'text' | 'voice' | 'dm';
+  topic: string | null;
   created_by: number;
   created_at: number;
 }
@@ -100,6 +101,36 @@ export interface SearchResult {
   username: string;
   content: string;
   created_at: number;
+}
+
+export interface ThreadReplyData {
+  id: number;
+  parent_message_id: number;
+  space_id: number;
+  user_id: number;
+  channel: string;
+  content: string;
+  created_at: number;
+  updated_at: number | null;
+  deleted_at: number | null;
+  username?: string;
+  reply_count: number;
+}
+
+export interface ThreadData {
+  parent: {
+    id: number;
+    space_id: number;
+    user_id: number;
+    channel: string;
+    content: string;
+    reply_count: number;
+    created_at: number;
+    updated_at: number | null;
+    deleted_at: number | null;
+    username?: string;
+  };
+  replies: ThreadReplyData[];
 }
 
 export const api = {
@@ -192,4 +223,17 @@ export const api = {
       `/spaces/${spaceId}/search?q=${encodeURIComponent(q)}${channel ? `&channel=${encodeURIComponent(channel)}` : ''}`,
       token,
     ),
+
+  updateChannelTopic: (token: string, spaceId: number, channelId: number, topic: string | null) =>
+    patch<{ id: number; topic: string | null }>(
+      `/spaces/${spaceId}/channels/${channelId}/topic`,
+      { topic },
+      token,
+    ),
+
+  getThread: (token: string, spaceId: number, messageId: number) =>
+    get<ThreadData>(`/spaces/${spaceId}/messages/${messageId}/thread`, token),
+
+  postThreadReply: (token: string, spaceId: number, messageId: number, content: string) =>
+    post<ThreadReplyData>(`/spaces/${spaceId}/messages/${messageId}/thread/replies`, { content }, token),
 };

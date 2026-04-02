@@ -25,6 +25,7 @@ export const channels = sqliteTable('channels', {
   space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   type: text('type').notNull().default('text'),
+  topic: text('topic'),
   created_by: integer('created_by').notNull().references(() => users.id),
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
 }, (table) => [
@@ -38,6 +39,7 @@ export const messages = sqliteTable('messages', {
   channel: text('channel').notNull().default('general'),
   content: text('content').notNull(),
   link_previews: text('link_previews'),
+  reply_count: integer('reply_count').notNull().default(0),
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
   updated_at: integer('updated_at'),
   deleted_at: integer('deleted_at'),
@@ -113,3 +115,17 @@ export const notification_queue = sqliteTable('notification_queue', {
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
   sent_at: integer('sent_at'),
 });
+
+export const thread_replies = sqliteTable('thread_replies', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  parent_message_id: integer('parent_message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),
+  user_id: integer('user_id').notNull().references(() => users.id),
+  channel: text('channel').notNull().default('general'),
+  content: text('content').notNull(),
+  created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
+  updated_at: integer('updated_at'),
+  deleted_at: integer('deleted_at'),
+}, (table) => [
+  index('idx_thread_replies_parent').on(table.parent_message_id, table.created_at),
+]);
