@@ -103,3 +103,13 @@ export const message_reactions = sqliteTable('message_reactions', {
 }, (table) => [
   uniqueIndex('message_reactions_unique').on(table.message_id, table.user_id, table.emoji),
 ]);
+
+export const notification_queue = sqliteTable('notification_queue', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  message_id: integer('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  space_id: integer('space_id').notNull(),
+  channel: text('channel').notNull(),
+  created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
+  sent_at: integer('sent_at'),
+});

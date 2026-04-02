@@ -421,6 +421,9 @@ export function createWsServer(server: import('http').Server) {
                 for (const s of sockets) {
                   if (s.readyState === WebSocket.OPEN) s.send(mentionPayload);
                 }
+              } else {
+                // User is offline — enqueue for email digest
+                void queries.enqueueNotification(member.user_id, messageId, socket.spaceId, socket.channelId);
               }
             }
           }
