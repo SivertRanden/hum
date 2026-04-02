@@ -1,1 +1,1 @@
-ALTER TABLE "messages" ADD COLUMN "link_previews" text;
+ALTER TABLE "messages" ADD COLUMN IF NOT EXISTS "link_previews" text;
