@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult } from './api.js';
+import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, PinnedMessage } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
@@ -216,6 +216,13 @@ function renderMessageContent(content: string, myUsername: string): React.ReactN
   });
 }
 
+// ── Pin icon ─────────────────────────────────────────────────────────────────
+function PinIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+    </svg>
+
 // ── Link preview card ─────────────────────────────────────────────────────────
 
 function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
@@ -297,7 +304,10 @@ interface MessageListProps {
   onOpenThread: (msg: HumMessage) => void;
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews, onOpenThread }: MessageListProps) {
+  onPinToggle: (id: number, pinned: boolean) => void;
+}
+
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews, onOpenThread, onPinToggle }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -338,6 +348,21 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
     }
   };
 
+  const handlePinToggle = async (msg: HumMessage) => {
+    if (!activeSpaceId) return;
+    try {
+      if (msg.pinnedAt) {
+        await api.unpinMessage(token, activeSpaceId, msg.id);
+        onPinToggle(msg.id, false);
+      } else {
+        await api.pinMessage(token, activeSpaceId, msg.id);
+        onPinToggle(msg.id, true);
+      }
+    } catch (err) {
+      console.error('[pin]', err);
+    }
+  };
+
   if (messages.length === 0) {
     return <div className="empty-state">no messages yet. say something.</div>;
   }
@@ -345,7 +370,8 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
   return (
     <div className="message-list">
       {messages.map(m => (
-        <div key={m.id} className={`message ${m.userId === myUserId ? 'mine' : ''}`}>
+        <div key={m.id} className={`message ${m.userId === myUserId ? 'mine' : ''}${m.pinnedAt ? ' pinned' : ''}`}>
+          {m.pinnedAt && <span className="msg-pin-indicator" title="Pinned message"><PinIcon size={12} /></span>}
           <span className="msg-username">{m.username}</span>
           {editingId === m.id ? (
             <span className="msg-edit-form">
@@ -389,6 +415,14 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
                 </div>
               )}
               <span className="msg-actions">
+              <span className="msg-actions">
+                <button
+                  className={`msg-action-btn msg-action-pin${m.pinnedAt ? ' active' : ''}`}
+                  onClick={() => void handlePinToggle(m)}
+                  title={m.pinnedAt ? 'Unpin' : 'Pin'}
+                >
+                  <PinIcon size={11} />
+                </button>
                 <button className="msg-action-btn msg-action-reply" onClick={() => onOpenThread(m)} title="Reply in thread">↩</button>
                 {m.userId === myUserId && (
                   <>
@@ -416,6 +450,36 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
         </div>
       ))}
       <div ref={bottomRef} />
+    </div>
+  );
+}
+
+// ── Pinned messages panel ─────────────────────────────────────────────────────
+interface PinnedPanelProps {
+  pinnedMessages: PinnedMessage[];
+  onClose: () => void;
+}
+
+function PinnedPanel({ pinnedMessages, onClose }: PinnedPanelProps) {
+  return (
+    <div className="pinned-panel">
+      <div className="pinned-panel-header">
+        <span className="pinned-panel-title"><PinIcon size={14} /> Pinned Messages</span>
+        <button className="pinned-panel-close" onClick={onClose} title="Close">✕</button>
+      </div>
+      <div className="pinned-panel-body">
+        {pinnedMessages.length === 0 ? (
+          <div className="pinned-panel-empty">No pinned messages in this channel.</div>
+        ) : (
+          pinnedMessages.map(m => (
+            <div key={m.id} className="pinned-msg">
+              <span className="pinned-msg-username">{m.username ?? 'unknown'}</span>
+              <span className="pinned-msg-content">{m.content}</span>
+              <span className="pinned-msg-time">{new Date(m.created_at * 1000).toLocaleDateString()}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -705,6 +769,8 @@ export default function App() {
   const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
   const [msgLinkPreviews, setMsgLinkPreviews] = useState<Record<number, LinkPreview[]>>({});
   const [dms, setDms] = useState<DmChannel[]>([]);
+  const [showPinnedPanel, setShowPinnedPanel] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
   activeSpaceIdRef.current = activeSpaceId;
@@ -934,6 +1000,31 @@ export default function App() {
   const handleDeleteMessage = useCallback((id: number) => {
     setMessages(prev => prev.filter(m => m.id !== id));
   }, []);
+
+  const handlePinToggle = useCallback((id: number, pinned: boolean) => {
+    const now = pinned ? Math.floor(Date.now() / 1000) : null;
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, pinnedAt: now } : m));
+    // Also refresh pinned list if panel is open
+    setPinnedMessages(prev => {
+      if (pinned) {
+        // Will be refreshed on next panel open; for now just remove if present
+        return prev;
+      } else {
+        return prev.filter(m => m.id !== id);
+      }
+    });
+  }, []);
+
+  const handleOpenPinnedPanel = async () => {
+    if (!auth || !activeSpaceId) return;
+    try {
+      const pinned = await api.getPinnedMessages(auth.token, activeSpaceId, activeChannelId);
+      setPinnedMessages(pinned);
+      setShowPinnedPanel(true);
+    } catch (err) {
+      console.error('[pinned]', err);
+    }
+  };
 
   const onTyping = useCallback((userId: number, username: string, isTyping: boolean) => {
     setTypingUsers(prev => {
@@ -1210,6 +1301,15 @@ export default function App() {
                 )
               )}
               <button
+              {!inVoice && !inDm && (
+                <button
+                  className={`header-pin-btn${showPinnedPanel ? ' active' : ''}`}
+                  onClick={() => showPinnedPanel ? setShowPinnedPanel(false) : void handleOpenPinnedPanel()}
+                  title="Pinned messages"
+                >
+                  <PinIcon size={16} />
+                </button>
+              )}
                 className="header-search-btn"
                 onClick={() => setShowSearch(true)}
                 aria-label="Search messages"
@@ -1247,58 +1347,68 @@ export default function App() {
               />
             ) : (
               <>
-                <MessageList
-                  messages={messages}
-                  myUserId={auth.userId}
-                  myUsername={auth.username}
-                  token={auth.token}
-                  activeSpaceId={activeSpaceId}
-                  openThreadMessageId={openThread?.id ?? null}
-                  onEditMessage={handleEditMessage}
-                  onDeleteMessage={handleDeleteMessage}
-                  reactions={reactions}
-                  onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
-                  linkPreviews={msgLinkPreviews}
-                  onOpenThread={setOpenThread}
-                />
-                {typingUsers.size > 0 && (
-                  <div className="typing-indicator">
-                    {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing…
-                  </div>
-                )}
-                {uploadError && (
-                  <div className="upload-error">{uploadError}</div>
-                )}
-                {pendingAttachment && (
-                  <div className="pending-attachment">
-                    {pendingAttachment.mimeType.startsWith('image/') ? (
-                      <img src={pendingAttachment.url} alt={pendingAttachment.filename} className="pending-attachment-preview" />
-                    ) : (
-                      <span className="pending-attachment-name">📎 {pendingAttachment.filename}</span>
-                    )}
-                    <button type="button" className="pending-attachment-remove" onClick={() => setPendingAttachment(null)}>✕</button>
-                  </div>
-                )}
-                <form className="compose" onSubmit={handleSend}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
-                    accept="image/*,application/pdf,text/*,.zip,.doc,.docx,.xls,.xlsx"
+                <div className="chat-area">
+                  {showPinnedPanel && (
+                    <PinnedPanel
+                      pinnedMessages={pinnedMessages}
+                      onClose={() => setShowPinnedPanel(false)}
+                    />
+                  )}
+                  <div className="chat-messages-col">
+                  <MessageList
+                    messages={messages}
+                    myUserId={auth.userId}
+                    myUsername={auth.username}
+                    token={auth.token}
+                    activeSpaceId={activeSpaceId}
+                    openThreadMessageId={openThread?.id ?? null}
+                    onEditMessage={handleEditMessage}
+                    onDeleteMessage={handleDeleteMessage}
+                    reactions={reactions}
+                    onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
+                    linkPreviews={msgLinkPreviews}
+                    onOpenThread={setOpenThread}
                   />
-                  <Button type="button" variant="ghost" size="sm" onClick={handleAttachClick} title="Attach file">
-                    📎
-                  </Button>
-                  <Input
-                    value={input}
-                    onChange={handleInputChange}
-                    placeholder={inDm ? `Message ${activeDm?.other_display_name ?? activeDm?.other_username ?? '…'}` : `Message #${activeChannelId}…`}
-                    autoFocus
-                    className="flex-1"
-                  />
-                  <Button type="submit" disabled={!input.trim() && !pendingAttachment} size="sm">send</Button>
-                </form>
+                  {typingUsers.size > 0 && (
+                    <div className="typing-indicator">
+                      {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing…
+                    </div>
+                  )}
+                  {uploadError && (
+                    <div className="upload-error">{uploadError}</div>
+                  )}
+                  {pendingAttachment && (
+                    <div className="pending-attachment">
+                      {pendingAttachment.mimeType.startsWith('image/') ? (
+                        <img src={pendingAttachment.url} alt={pendingAttachment.filename} className="pending-attachment-preview" />
+                      ) : (
+                        <span className="pending-attachment-name">📎 {pendingAttachment.filename}</span>
+                      )}
+                      <button type="button" className="pending-attachment-remove" onClick={() => setPendingAttachment(null)}>✕</button>
+                    </div>
+                  )}
+                  <form className="compose" onSubmit={handleSend}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      style={{ display: 'none' }}
+                      onChange={handleFileChange}
+                      accept="image/*,application/pdf,text/*,.zip,.doc,.docx,.xls,.xlsx"
+                    />
+                    <Button type="button" variant="ghost" size="sm" onClick={handleAttachClick} title="Attach file">
+                      📎
+                    </Button>
+                    <Input
+                      value={input}
+                      onChange={handleInputChange}
+                      placeholder={inDm ? `Message ${activeDm?.other_display_name ?? activeDm?.other_username ?? '…'}` : `Message #${activeChannelId}…`}
+                      autoFocus
+                      className="flex-1"
+                    />
+                    <Button type="submit" disabled={!input.trim() && !pendingAttachment} size="sm">send</Button>
+                  </form>
+                  </div>
+                </div>
               </>
             )}
           </>

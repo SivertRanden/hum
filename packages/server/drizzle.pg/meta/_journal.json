@@ -78,6 +78,13 @@
       "when": 1775145000000,
       "tag": "0010_add_thread_replies",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1743897600000,
+      "tag": "0011_add_pinned_at",
+      "breakpoints": true
     }
   ]
 }

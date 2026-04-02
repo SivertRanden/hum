@@ -155,6 +155,50 @@ router.patch('/:id/messages/:messageId', requireAuth, async (req: AuthRequest, r
   res.json({ id: messageId, content: trimmed, editedAt });
 });
 
+router.patch('/:id/messages/:messageId/pin', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const pinned = await queries.pinMessage(messageId);
+  if (!pinned) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const fresh = await queries.getMessageById(messageId);
+  res.json({ id: messageId, pinnedAt: fresh?.pinned_at ?? null });
+});
+
+router.patch('/:id/messages/:messageId/unpin', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const unpinned = await queries.unpinMessage(messageId);
+  if (!unpinned) { res.status(404).json({ error: 'message not found' }); return; }
+
+  res.json({ id: messageId, pinnedAt: null });
+});
+
+router.get('/:id/channels/:channelName/pinned', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const channelName = req.params.channelName;
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const pinned = await queries.getPinnedMessages(spaceId, channelName);
+  res.json(pinned);
+});
+
 router.delete('/:id/messages/:messageId', requireAuth, async (req: AuthRequest, res: Response) => {
   const spaceId = Number(req.params.id);
   const messageId = Number(req.params.messageId);

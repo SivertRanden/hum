@@ -35,12 +35,12 @@ export interface HumMessage {
   linkPreviews?: LinkPreview[];
   attachments?: MessageAttachment[];
   replyCount?: number;
+  pinnedAt?: number | null;
 }
 
 export interface ReactionEvent {
   type: 'message:reaction';
   reaction: { messageId: number; emoji: string; userId: number; username: string; action: 'add' | 'remove' };
-}
 
 export interface VoicePeer {
   userId: number;
