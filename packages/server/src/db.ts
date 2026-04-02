@@ -181,6 +181,7 @@ export interface Queries {
 
   createPasswordResetToken(userId: number, token: string, expiresAt: number): Promise<void>;
   getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  getLatestResetTokenForEmail(email: string): Promise<string | undefined>;
   markPasswordResetTokenUsed(token: string): Promise<void>;
 
   listSpaces(): Promise<Space[]>;
@@ -434,6 +435,18 @@ function buildSqliteQueries(): Queries {
 
     getPasswordResetToken: async (token) =>
       db.select().from(password_reset_tokens).where(eq(password_reset_tokens.token, token)).get() as PasswordResetToken | undefined,
+
+    getLatestResetTokenForEmail: async (email) => {
+      const { users } = sqliteSchema;
+      const row = db.select({ token: password_reset_tokens.token })
+        .from(password_reset_tokens)
+        .innerJoin(users, eq(password_reset_tokens.user_id, users.id))
+        .where(eq(users.email, email))
+        .orderBy(desc(password_reset_tokens.expires_at))
+        .limit(1)
+        .get() as { token: string } | undefined;
+      return row?.token;
+    },
 
     markPasswordResetTokenUsed: async (token) => {
       db.update(password_reset_tokens)
@@ -1030,6 +1043,16 @@ async function buildPgQueries(): Promise<Queries> {
     getPasswordResetToken: async (token) => {
       const rows = await db.select().from(password_reset_tokens).where(eq(password_reset_tokens.token, token)).limit(1);
       return rows[0] as PasswordResetToken | undefined;
+    },
+
+    getLatestResetTokenForEmail: async (email) => {
+      const rows = await db.select({ token: password_reset_tokens.token })
+        .from(password_reset_tokens)
+        .innerJoin(users, eq(password_reset_tokens.user_id, users.id))
+        .where(eq(users.email, email))
+        .orderBy(desc(password_reset_tokens.expires_at))
+        .limit(1);
+      return rows[0]?.token;
     },
 
     markPasswordResetTokenUsed: async (token) => {
