@@ -13,19 +13,17 @@ interface HumSocket extends WebSocket {
 // ── Text chat types ───────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'typing_start' | 'typing_stop' | 'reaction:toggle';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'typing_start' | 'typing_stop';
   spaceId?: number;
   channelId?: string;
   content?: string;
   token?: string;
-  messageId?: number;
-  emoji?: string;
 }
 
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:peer_left'
-      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction';
+      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message';
   spaceId?: number;
   channelId?: string;
   // typing indicator fields
@@ -50,7 +48,6 @@ interface ServerMessage {
   // presence fields
   isOnline?: boolean;
   lastSeenAt?: number;
-  reaction?: { messageId: number; emoji: string; userId: number; username: string; action: 'add' | 'remove' };
 }
 
 // ── Room key ─────────────────────────────────────────────────────────────────
