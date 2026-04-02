@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult } from './api.js';
+import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, UserProfile } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
@@ -17,6 +17,7 @@ import { ServerRail } from './components/ServerRail.js';
 import { ChannelSidebar } from './components/ChannelSidebar.js';
 import { ThreadPanel } from './components/ThreadPanel.js';
 import { AdminDashboard } from './components/AdminDashboard.js';
+import { UserProfileCard } from './components/UserProfileCard.js';
 import './app.css';
 
 interface AuthState {
@@ -302,6 +303,16 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
+
+  const handleUsernameClick = async (userId: number) => {
+    try {
+      const profile = await api.getUserProfile(token, userId);
+      setSelectedProfile(profile);
+    } catch (err) {
+      console.error('[profile]', err);
+    }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -347,7 +358,7 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
     <div className="message-list">
       {messages.map(m => (
         <div key={m.id} className={`message ${m.userId === myUserId ? 'mine' : ''}`}>
-          <span className="msg-username">{m.username}</span>
+          <span className="msg-username" style={{ cursor: 'pointer' }} onClick={() => void handleUsernameClick(m.userId)}>{m.username}</span>
           {editingId === m.id ? (
             <span className="msg-edit-form">
               <input
@@ -417,6 +428,15 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
         </div>
       ))}
       <div ref={bottomRef} />
+      {selectedProfile && (
+        <UserProfileCard
+          profile={selectedProfile}
+          isOwnProfile={selectedProfile.id === myUserId}
+          token={token}
+          onClose={() => setSelectedProfile(null)}
+          onProfileUpdate={(updated) => setSelectedProfile(updated)}
+        />
+      )}
     </div>
   );
 }

@@ -138,7 +138,7 @@ test.describe('User profiles', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a message so there is a username to click
-    await page.locator('.compose input').fill('Profile click test');
+    await page.locator('.compose input[type="text"]').fill('Profile click test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Profile click test' })).toBeVisible({ timeout: 5_000 });
 
@@ -153,7 +153,7 @@ test.describe('User profiles', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a message so there's an own message with a clickable username
-    await page.locator('.compose input').fill('Own profile test');
+    await page.locator('.compose input[type="text"]').fill('Own profile test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Own profile test' })).toBeVisible({ timeout: 5_000 });
 
@@ -171,7 +171,7 @@ test.describe('User profiles', () => {
     await createSpace(page, `ProfEditSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Display name edit test');
+    await page.locator('.compose input[type="text"]').fill('Display name edit test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Display name edit test' })).toBeVisible({ timeout: 5_000 });
 
@@ -196,7 +196,7 @@ test.describe('User profiles', () => {
     await createSpace(page, `ProfCloseSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Close profile test');
+    await page.locator('.compose input[type="text"]').fill('Close profile test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Close profile test' })).toBeVisible({ timeout: 5_000 });
 

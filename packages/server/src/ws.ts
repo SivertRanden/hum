@@ -228,6 +228,15 @@ export function createWsServer(server: import('http').Server) {
     // Track which voice rooms this socket has joined (for cleanup on disconnect)
     const activeVoiceRooms = new Set<string>(); // "<spaceId>:<channelId>"
 
+    // Absorb EPIPE/ECONNRESET emitted when a browser navigates away mid-connection.
+    // Without this handler Node.js treats the error event as an uncaught exception
+    // and terminates the process, taking down all subsequent E2E tests.
+    socket.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') {
+        console.error('[ws] socket error:', err);
+      }
+    });
+
     socket.on('message', async (raw) => {
       try {
       let msg: ClientMessage;

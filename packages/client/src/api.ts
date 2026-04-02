@@ -199,6 +199,9 @@ export const api = {
   getUnreadCounts: (token: string, spaceId: number) =>
     get<Record<string, number>>(`/spaces/${spaceId}/unread`, token),
 
+  getUserProfile: (token: string, userId: number) =>
+    get<UserProfile>(`/users/${userId}`, token),
+
   updateUserProfile: (token: string, userId: number, displayName: string | null) =>
     patch<UserProfile>(`/users/${userId}/profile`, { displayName }, token),
 
