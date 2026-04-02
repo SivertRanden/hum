@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
-import { migrate as migrateSqlite } from 'drizzle-orm/better-sqlite3/migrator';
 import { eq, and, isNull, asc, sql, inArray, ne } from 'drizzle-orm';
 import * as sqliteSchema from './schema.js';
 
@@ -238,6 +239,69 @@ export interface SearchResult {
 
 // ── SQLite driver ─────────────────────────────────────────────────────────────
 
+/**
+ * Idempotent SQLite migration runner.
+ *
+ * Drizzle's built-in migrator runs every migration whose folderMillis timestamp
+ * is newer than the most-recently-recorded one, but it does not tolerate duplicate
+ * DDL statements (e.g. ALTER TABLE ADD COLUMN on a column that already exists).
+ * This replacement runner executes each pending statement inside a transaction and
+ * silently skips any statement that fails with "duplicate column name" or "already
+ * exists", making migrations safe to re-run against a partially-initialised DB.
+ */
+function runSqliteMigrationsIdempotent(rawDb: Database.Database, migrationsFolder: string): void {
+  rawDb.exec(`
+    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+      id    INTEGER PRIMARY KEY AUTOINCREMENT,
+      hash  TEXT    NOT NULL,
+      created_at NUMERIC
+    )
+  `);
+
+  const lastRow = rawDb
+    .prepare('SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1')
+    .get() as { created_at: number } | undefined;
+  const lastMillis = lastRow ? Number(lastRow.created_at) : -1;
+
+  const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8')) as {
+    entries: Array<{ tag: string; when: number }>;
+  };
+
+  for (const entry of journal.entries) {
+    if (entry.when <= lastMillis) continue;
+
+    const sqlPath = path.join(migrationsFolder, `${entry.tag}.sql`);
+    if (!fs.existsSync(sqlPath)) {
+      throw new Error(`Migration file not found: ${sqlPath}`);
+    }
+
+    const sqlContent = fs.readFileSync(sqlPath, 'utf-8');
+    const statements = sqlContent
+      .split('--> statement-breakpoint')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const hash = crypto.createHash('sha256').update(sqlContent).digest('hex');
+
+    rawDb.transaction(() => {
+      for (const stmt of statements) {
+        try {
+          rawDb.exec(stmt);
+        } catch (err: any) {
+          const msg: string = err?.message ?? '';
+          if (msg.includes('duplicate column name') || msg.includes('already exists')) {
+            continue; // idempotent — skip already-applied DDL
+          }
+          throw err;
+        }
+      }
+      rawDb
+        .prepare('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)')
+        .run(hash, entry.when);
+    })();
+  }
+}
+
 function buildSqliteQueries(): Queries {
   const { users, spaces, channels, messages, space_members, invite_tokens, password_reset_tokens, thread_replies, message_attachments } = sqliteSchema;
 
@@ -248,8 +312,8 @@ function buildSqliteQueries(): Queries {
   rawDb.pragma('journal_mode = WAL');
   rawDb.pragma('foreign_keys = ON');
 
+  runSqliteMigrationsIdempotent(rawDb, MIGRATIONS_FOLDER);
   const db = drizzleSqlite(rawDb, { schema: sqliteSchema });
-  migrateSqlite(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
   // Backward-compat: add columns that predate the Drizzle migration for existing databases
   try { rawDb.exec("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'"); } catch { /* already exists */ }

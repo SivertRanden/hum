@@ -1,1 +1,1 @@
-ALTER TABLE "channels" ADD COLUMN "topic" text;
+ALTER TABLE "channels" ADD COLUMN IF NOT EXISTS "topic" text;
