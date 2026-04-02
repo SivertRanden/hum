@@ -1,9 +1,16 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { AccessToken } from 'livekit-server-sdk';
-import { queries, Channel } from '../db.js';
+import { queries, Channel, SpaceRole } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware.js';
 import { broadcast, getOnlineUserIds } from '../ws.js';
+
+// Role hierarchy — higher number = more authority
+const ROLE_RANK: Record<SpaceRole, number> = { owner: 4, admin: 3, moderator: 2, member: 1 };
+
+function canManage(actor: SpaceRole, target: SpaceRole): boolean {
+  return ROLE_RANK[actor] > ROLE_RANK[target];
+}
 
 const router = Router();
 
@@ -55,6 +62,10 @@ router.post('/:id/channels', requireAuth, async (req: AuthRequest, res: Response
   const spaceId = Number(req.params.id);
   const space = await queries.getSpaceById(spaceId);
   if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const actor = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!actor || ROLE_RANK[actor.role as SpaceRole] < ROLE_RANK.admin) {
+    res.status(403).json({ error: 'only admins and owners can create channels' }); return;
+  }
   const { name, type = 'text' } = req.body as { name?: string; type?: string };
   if (!name?.trim()) { res.status(400).json({ error: 'name required' }); return; }
   if (type !== 'text' && type !== 'voice') { res.status(400).json({ error: 'type must be text or voice' }); return; }
@@ -76,6 +87,10 @@ router.delete('/:id/channels/:channelId', requireAuth, async (req: AuthRequest, 
   const channelId = Number(req.params.channelId);
   const space = await queries.getSpaceById(spaceId);
   if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const actor = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!actor || ROLE_RANK[actor.role as SpaceRole] < ROLE_RANK.admin) {
+    res.status(403).json({ error: 'only admins and owners can delete channels' }); return;
+  }
   const channel = await queries.getChannelById(channelId) as Channel | undefined;
   if (!channel || channel.space_id !== spaceId) { res.status(404).json({ error: 'channel not found' }); return; }
   await queries.deleteChannel(channelId, spaceId);
@@ -204,6 +219,51 @@ router.get('/:id/members', requireAuth, async (req: AuthRequest, res: Response) 
   const members = await queries.listSpaceMembers(spaceId);
   const onlineIds = getOnlineUserIds();
   res.json(members.map(m => ({ ...m, is_online: onlineIds.has(m.user_id) })));
+});
+
+router.patch('/:id/members/:userId', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const targetUserId = Number(req.params.userId);
+  const { role } = req.body as { role?: string };
+  const validRoles: SpaceRole[] = ['admin', 'moderator', 'member'];
+  if (!role || !validRoles.includes(role as SpaceRole)) {
+    res.status(400).json({ error: 'role must be one of: admin, moderator, member' }); return;
+  }
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const actor = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!actor) { res.status(403).json({ error: 'not a member' }); return; }
+  const target = await queries.getSpaceMember(spaceId, targetUserId);
+  if (!target) { res.status(404).json({ error: 'member not found' }); return; }
+  if (target.role === 'owner') { res.status(403).json({ error: 'cannot change the owner\'s role' }); return; }
+  // Actor must outrank the target and the new role
+  if (!canManage(actor.role as SpaceRole, target.role as SpaceRole)) {
+    res.status(403).json({ error: 'insufficient permissions' }); return;
+  }
+  if (!canManage(actor.role as SpaceRole, role as SpaceRole)) {
+    res.status(403).json({ error: 'cannot assign a role equal to or higher than your own' }); return;
+  }
+  await queries.updateMemberRole(spaceId, targetUserId, role as SpaceRole);
+  broadcast(spaceId, 'general', { type: 'member:role_update', spaceId, userId: targetUserId, role });
+  res.json({ userId: targetUserId, role });
+});
+
+router.delete('/:id/members/:userId', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const targetUserId = Number(req.params.userId);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const actor = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!actor) { res.status(403).json({ error: 'not a member' }); return; }
+  const target = await queries.getSpaceMember(spaceId, targetUserId);
+  if (!target) { res.status(404).json({ error: 'member not found' }); return; }
+  if (target.role === 'owner') { res.status(403).json({ error: 'cannot kick the owner' }); return; }
+  if (!canManage(actor.role as SpaceRole, target.role as SpaceRole)) {
+    res.status(403).json({ error: 'insufficient permissions to kick this member' }); return;
+  }
+  await queries.removeMember(spaceId, targetUserId);
+  broadcast(spaceId, 'general', { type: 'member:kick', spaceId, userId: targetUserId });
+  res.status(204).end();
 });
 
 // ── Unread counts ─────────────────────────────────────────────────────────────

@@ -95,11 +95,13 @@ export interface ThreadReply {
   avatar_url?: string | null;
 }
 
+export type SpaceRole = 'owner' | 'admin' | 'moderator' | 'member';
+
 export interface SpaceMember {
   id: number;
   space_id: number;
   user_id: number;
-  role: 'owner' | 'member';
+  role: SpaceRole;
   joined_at: number;
   username?: string;
   display_name?: string | null;
@@ -187,6 +189,8 @@ export interface Queries {
   listSpaceMembers(space_id: number): Promise<(SpaceMember & { username: string; last_seen_at: number | null })[]>;
   addSpaceMember(space_id: number, user_id: number, role: string): Promise<void>;
   getSpaceMember(space_id: number, user_id: number): Promise<SpaceMember | undefined>;
+  updateMemberRole(space_id: number, user_id: number, role: SpaceRole): Promise<void>;
+  removeMember(space_id: number, user_id: number): Promise<void>;
 
   updateLastSeen(user_id: number): Promise<void>;
 
@@ -467,6 +471,19 @@ function buildSqliteQueries(): Queries {
       db.select().from(space_members)
         .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)))
         .get() as SpaceMember | undefined,
+
+    updateMemberRole: async (space_id, user_id, role) => {
+      db.update(space_members)
+        .set({ role })
+        .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)))
+        .run();
+    },
+
+    removeMember: async (space_id, user_id) => {
+      db.delete(space_members)
+        .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)))
+        .run();
+    },
 
     updateLastSeen: async (user_id) => {
       db.update(users).set({ last_seen_at: nowEpoch }).where(eq(users.id, user_id)).run();
@@ -947,6 +964,17 @@ async function buildPgQueries(): Promise<Queries> {
         .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)))
         .limit(1);
       return rows[0] as SpaceMember | undefined;
+    },
+
+    updateMemberRole: async (space_id, user_id, role) => {
+      await db.update(space_members)
+        .set({ role })
+        .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)));
+    },
+
+    removeMember: async (space_id, user_id) => {
+      await db.delete(space_members)
+        .where(and(eq(space_members.space_id, space_id), eq(space_members.user_id, user_id)));
     },
 
     updateLastSeen: async (user_id) => {

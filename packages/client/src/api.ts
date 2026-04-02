@@ -82,11 +82,13 @@ export interface UserProfile {
   avatarUrl: string | null;
 }
 
+export type SpaceRole = 'owner' | 'admin' | 'moderator' | 'member';
+
 export interface SpaceMember {
   id: number;
   space_id: number;
   user_id: number;
-  role: 'owner' | 'member';
+  role: SpaceRole;
   joined_at: number;
   username: string;
   is_online?: boolean;
@@ -249,4 +251,10 @@ export const api = {
     if (!res.ok) throw new Error(data.error ?? 'Upload failed');
     return data;
   },
+
+  updateMemberRole: (token: string, spaceId: number, userId: number, role: SpaceRole) =>
+    patch<{ userId: number; role: SpaceRole }>(`/spaces/${spaceId}/members/${userId}`, { role }, token),
+
+  kickMember: (token: string, spaceId: number, userId: number) =>
+    del(`/spaces/${spaceId}/members/${userId}`, token),
 };

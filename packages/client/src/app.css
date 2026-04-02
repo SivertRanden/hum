@@ -914,6 +914,105 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .msg-edit-save:hover { border-color: var(--accent); color: var(--accent); }
 .msg-edit-cancel:hover { color: var(--text); }
 
+/* ── Member list ─────────────────────────────────────────────────────────── */
+
+.member-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px;
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.member-entry:hover { background: var(--surface2, rgba(255,255,255,0.06)); }
+
+.member-name {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent, #7c3aed);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.member-role {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.member-role-owner { background: var(--hum-accent, #7c3aed); color: #fff; }
+.member-role-admin { background: #dc2626; color: #fff; }
+.member-role-moderator { background: #0891b2; color: #fff; }
+
+.member-manage-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity var(--hum-transition-fast), color var(--hum-transition-fast);
+}
+
+.member-entry:hover .member-manage-btn { opacity: 1; }
+.member-manage-btn:hover { color: var(--text); background: var(--surface2); }
+
+.member-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  background: var(--surface1, #1e1e2e);
+  border: 1px solid var(--surface2, rgba(255,255,255,0.1));
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  min-width: 140px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.member-menu button {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  width: 100%;
+}
+
+.member-menu button:hover { background: var(--surface2); }
+.member-menu .member-menu-kick { color: var(--hum-error, #e53e3e); }
+.member-menu .member-menu-kick:hover { background: rgba(229,62,62,0.15); }
+
 /* ── Member presence indicators ─────────────────────────────────────────── */
 
 .member-avatar-wrap {
