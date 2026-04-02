@@ -1,5 +1,8 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { AccessToken } from 'livekit-server-sdk';
 import { queries, Channel, SpaceRole } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware.js';
@@ -10,6 +13,15 @@ const ROLE_RANK: Record<SpaceRole, number> = { owner: 4, admin: 3, moderator: 2,
 
 function canManage(actor: SpaceRole, target: SpaceRole): boolean {
   return ROLE_RANK[actor] > ROLE_RANK[target];
+}
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOADS_DIR = process.env.UPLOADS_DIR ?? path.join(__dirname, '../../../uploads');
+const MAX_EMOJI_SIZE = 512 * 1024; // 512 KB
+const EMOJI_NAME_RE = /^[a-z0-9_-]{2,32}$/;
+
+function ensureUploadsDir() {
+  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
 const router = Router();
@@ -462,6 +474,94 @@ router.get('/:id/audit-log', requireAuth, async (req: AuthRequest, res: Response
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const logs = await queries.getAuditLogs(spaceId, limit);
   res.json(logs);
+});
+
+// ── Custom emoji ──────────────────────────────────────────────────────────────
+
+router.get('/:id/emoji', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const emoji = await queries.listSpaceEmoji(spaceId);
+  res.json(emoji);
+});
+
+router.post('/:id/emoji', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  // Only space owner (admin) can add emoji
+  const member = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!member || member.role !== 'owner') {
+    res.status(403).json({ error: 'only space admins can add custom emoji' });
+    return;
+  }
+
+  const { name, dataUrl } = req.body as { name?: string; dataUrl?: string };
+
+  if (!name || !EMOJI_NAME_RE.test(name)) {
+    res.status(400).json({ error: 'name must be 2-32 lowercase letters, digits, hyphens, or underscores' });
+    return;
+  }
+  if (!dataUrl?.startsWith('data:image/')) {
+    res.status(400).json({ error: 'invalid image data' });
+    return;
+  }
+
+  const matches = dataUrl.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
+  if (!matches) { res.status(400).json({ error: 'invalid data URL format' }); return; }
+  const [, mimeType, base64Data] = matches;
+  const buffer = Buffer.from(base64Data, 'base64');
+  if (buffer.length > MAX_EMOJI_SIZE) {
+    res.status(400).json({ error: 'image too large (max 512 KB)' });
+    return;
+  }
+
+  const ext = mimeType.split('/')[1].replace('jpeg', 'jpg').replace('+xml', '');
+  ensureUploadsDir();
+  const filename = `emoji_${spaceId}_${name}_${crypto.randomBytes(4).toString('hex')}.${ext}`;
+  const filePath = path.join(UPLOADS_DIR, filename);
+  fs.writeFileSync(filePath, buffer);
+
+  const imageUrl = `/uploads/${filename}`;
+  try {
+    const emoji = await queries.addSpaceEmoji(spaceId, name, imageUrl, req.user!.userId);
+    res.status(201).json(emoji);
+  } catch (err: unknown) {
+    fs.unlinkSync(filePath);
+    if (err instanceof Error && (err.message.includes('UNIQUE') || err.message.includes('unique'))) {
+      res.status(409).json({ error: 'emoji name already exists in this space' });
+    } else {
+      throw err;
+    }
+  }
+});
+
+router.delete('/:id/emoji/:name', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const emojiName = req.params.name;
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const member = await queries.getSpaceMember(spaceId, req.user!.userId);
+  if (!member || member.role !== 'owner') {
+    res.status(403).json({ error: 'only space admins can delete custom emoji' });
+    return;
+  }
+
+  const emojiList = await queries.listSpaceEmoji(spaceId);
+  const emoji = emojiList.find(e => e.name === emojiName);
+  if (!emoji) { res.status(404).json({ error: 'emoji not found' }); return; }
+
+  if (emoji.image_url.startsWith('/uploads/')) {
+    const filePath = path.join(UPLOADS_DIR, path.basename(emoji.image_url));
+    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+  }
+
+  await queries.deleteSpaceEmoji(spaceId, emojiName);
+  res.status(204).end();
 });
 
 export default router;
