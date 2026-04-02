@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { type Space, type Channel, type SpaceMember, type DmChannel } from '../api.js';
+import { type Space, type Channel, type SpaceMember, type SpaceRole, type DmChannel } from '../api.js';
 import { type VoicePeer } from '../useSocket.js';
+
+const ROLE_RANK: Record<SpaceRole, number> = { owner: 4, admin: 3, moderator: 2, member: 1 };
 
 interface ChannelSidebarProps {
   server: Space | null;
   activeChannelId: string;
   onSelectChannel: (id: string) => void;
   username: string;
+  currentUserId: number;
   onSignOut: () => void;
   onOpenSettings: () => void;
   channels: Channel[];
@@ -16,6 +19,8 @@ interface ChannelSidebarProps {
   activeVoiceRoomId: string | null;
   members: SpaceMember[];
   onCreateInvite: () => Promise<string>;
+  onUpdateMemberRole?: (userId: number, role: SpaceRole) => Promise<void>;
+  onKickMember?: (userId: number) => Promise<void>;
   unreadCounts?: Map<string, number>;
   onMobileBack?: () => void;
   dms?: DmChannel[];
@@ -88,6 +93,7 @@ export function ChannelSidebar({
   activeChannelId,
   onSelectChannel,
   username,
+  currentUserId,
   onSignOut,
   onOpenSettings,
   channels,
@@ -97,6 +103,8 @@ export function ChannelSidebar({
   activeVoiceRoomId,
   members,
   onCreateInvite,
+  onUpdateMemberRole,
+  onKickMember,
   unreadCounts = new Map(),
   onMobileBack,
   dms = [],
@@ -109,6 +117,11 @@ export function ChannelSidebar({
   const [showMembers, setShowMembers] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [showDmPicker, setShowDmPicker] = useState(false);
+  const [memberMenuUserId, setMemberMenuUserId] = useState<number | null>(null);
+
+  const myMember = members.find(m => m.user_id === currentUserId);
+  const myRole = myMember?.role ?? 'member';
+  const myRank = ROLE_RANK[myRole];
 
   const textChannels = channels.filter(ch => ch.type === 'text');
   const voiceChannels = channels.filter(ch => ch.type === 'voice');
@@ -324,16 +337,54 @@ export function ChannelSidebar({
             </div>
             {showMembers && (
               <ul className="channel-list">
-                {members.map((m: SpaceMember) => (
-                  <li key={m.id} className="member-entry">
-                    <div className="member-avatar-wrap">
-                      <div className="member-avatar">{m.username.slice(0, 2).toUpperCase()}</div>
-                      <span className={m.is_online ? 'presence-dot online' : 'presence-dot offline'} />
-                    </div>
-                    <span className="member-name">{m.username}</span>
-                    {m.role === 'owner' && <span className="member-role">owner</span>}
-                  </li>
-                ))}
+                {members.map((m: SpaceMember) => {
+                  const canManageThis = m.user_id !== currentUserId && m.role !== 'owner' && myRank > ROLE_RANK[m.role];
+                  const isMenuOpen = memberMenuUserId === m.user_id;
+                  return (
+                    <li key={m.id} className="member-entry" style={{ position: 'relative' }}>
+                      <div className="member-avatar-wrap">
+                        <div className="member-avatar">{m.username.slice(0, 2).toUpperCase()}</div>
+                        <span className={m.is_online ? 'presence-dot online' : 'presence-dot offline'} />
+                      </div>
+                      <span className="member-name">{m.username}</span>
+                      {m.role !== 'member' && <span className={`member-role member-role-${m.role}`}>{m.role}</span>}
+                      {canManageThis && (
+                        <button
+                          className="member-manage-btn"
+                          title="Manage member"
+                          onClick={() => setMemberMenuUserId(isMenuOpen ? null : m.user_id)}
+                        >
+                          ⋯
+                        </button>
+                      )}
+                      {isMenuOpen && canManageThis && (
+                        <div className="member-menu" onMouseLeave={() => setMemberMenuUserId(null)}>
+                          {myRank > ROLE_RANK.admin && m.role !== 'admin' && (
+                            <button onClick={() => { void onUpdateMemberRole?.(m.user_id, 'admin'); setMemberMenuUserId(null); }}>
+                              Set Admin
+                            </button>
+                          )}
+                          {myRank > ROLE_RANK.moderator && m.role !== 'moderator' && (
+                            <button onClick={() => { void onUpdateMemberRole?.(m.user_id, 'moderator'); setMemberMenuUserId(null); }}>
+                              Set Moderator
+                            </button>
+                          )}
+                          {m.role !== 'member' && (
+                            <button onClick={() => { void onUpdateMemberRole?.(m.user_id, 'member'); setMemberMenuUserId(null); }}>
+                              Set Member
+                            </button>
+                          )}
+                          <button
+                            className="member-menu-kick"
+                            onClick={() => { void onKickMember?.(m.user_id); setMemberMenuUserId(null); }}
+                          >
+                            Kick
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
             {inviteCopied && (

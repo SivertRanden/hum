@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember, DmChannel, SearchResult } from './api.js';
+import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
@@ -1056,6 +1056,18 @@ export default function App() {
     return token;
   };
 
+  const handleUpdateMemberRole = async (userId: number, role: SpaceRole) => {
+    if (!auth || !activeSpaceId) return;
+    await api.updateMemberRole(auth.token, activeSpaceId, userId, role);
+    setMembers(prev => prev.map(m => m.user_id === userId ? { ...m, role } : m));
+  };
+
+  const handleKickMember = async (userId: number) => {
+    if (!auth || !activeSpaceId) return;
+    await api.kickMember(auth.token, activeSpaceId, userId);
+    setMembers(prev => prev.filter(m => m.user_id !== userId));
+  };
+
   const handleDeleteSpace = async (id: number) => {
     if (!auth) return;
     await api.deleteSpace(auth.token, id);
@@ -1116,6 +1128,7 @@ export default function App() {
         activeChannelId={activeChannelId}
         onSelectChannel={handleSelectChannel}
         username={auth.username}
+        currentUserId={auth.userId}
         onSignOut={handleSignOut}
         onOpenSettings={() => setShowSettings(true)}
         channels={channels}
@@ -1125,6 +1138,8 @@ export default function App() {
         activeVoiceRoomId={isInRoom ? activeChannelId : null}
         members={members}
         onCreateInvite={handleCreateInvite}
+        onUpdateMemberRole={handleUpdateMemberRole}
+        onKickMember={handleKickMember}
         unreadCounts={unreadCounts}
         onMobileBack={() => setMobileView('servers')}
         dms={dms}

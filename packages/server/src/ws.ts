@@ -36,7 +36,8 @@ interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:peer_left'
       | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction'
-      | 'message:link_preview';
+      | 'message:link_preview' | 'member:role_update' | 'member:kick';
+  role?: string;
   // link preview fields
   linkPreview?: { messageId: number; previews: LinkPreview[] };
   spaceId?: number;
