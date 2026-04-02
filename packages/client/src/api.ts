@@ -105,6 +105,19 @@ export interface SearchResult {
   created_at: number;
 }
 
+export interface PinnedMessage {
+  id: number;
+  space_id: number;
+  user_id: number;
+  channel: string;
+  content: string;
+  created_at: number;
+  updated_at: number | null;
+  deleted_at: number | null;
+  pinned_at: number | null;
+  username?: string;
+}
+
 export interface ThreadReplyData {
   id: number;
   parent_message_id: number;
@@ -240,6 +253,23 @@ export const api = {
 
   openDm: (token: string, spaceId: number, targetUserId: number) =>
     post<{ channelId: number }>(`/spaces/${spaceId}/dms`, { targetUserId }, token),
+
+  pinMessage: (token: string, spaceId: number, messageId: number) =>
+    patch<{ id: number; pinnedAt: number | null }>(
+      `/spaces/${spaceId}/messages/${messageId}/pin`,
+      {},
+      token,
+    ),
+
+  unpinMessage: (token: string, spaceId: number, messageId: number) =>
+    patch<{ id: number; pinnedAt: null }>(
+      `/spaces/${spaceId}/messages/${messageId}/unpin`,
+      {},
+      token,
+    ),
+
+  getPinnedMessages: (token: string, spaceId: number, channel: string) =>
+    get<PinnedMessage[]>(`/spaces/${spaceId}/channels/${encodeURIComponent(channel)}/pinned`, token),
 
   searchMessages: (token: string, spaceId: number, q: string, channel?: string) =>
     get<SearchResult[]>(
