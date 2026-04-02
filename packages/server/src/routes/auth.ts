@@ -124,4 +124,144 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   res.json({ message: 'Password updated successfully.' });
 });
 
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+
+router.get('/google', (req: Request, res: Response) => {
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID ?? '',
+    redirect_uri: `${process.env.OAUTH_CALLBACK_BASE ?? 'http://localhost:3001'}/auth/google/callback`,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+router.get('/google/callback', async (req: Request, res: Response) => {
+  const code = req.query.code as string;
+  if (!code) { res.status(400).send('Missing code'); return; }
+
+  try {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: `${process.env.OAUTH_CALLBACK_BASE ?? 'http://localhost:3001'}/auth/google/callback`,
+      }),
+    });
+    const tokenData = await tokenRes.json() as { access_token?: string; id_token?: string };
+
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await profileRes.json() as { sub?: string; email?: string; name?: string; given_name?: string };
+
+    if (!profile.sub) { res.status(400).send('OAuth profile missing id'); return; }
+
+    let user = await queries.getUserByOAuth('google', profile.sub);
+    if (!user) {
+      const baseUsername = (profile.given_name ?? profile.name ?? profile.email?.split('@')[0] ?? 'user').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 28);
+      let username = baseUsername || 'user';
+      let attempt = 0;
+      while (await queries.getUserByUsername(username)) {
+        username = `${baseUsername}${++attempt}`;
+      }
+      await queries.createOAuthUser(username, 'google', profile.sub, profile.email);
+      user = await queries.getUserByOAuth('google', profile.sub);
+      if (!user) { res.status(500).send('Failed to create user'); return; }
+    }
+
+    const token = signToken({ userId: user.id, username: user.username });
+    const clientOrigin = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
+    res.redirect(`${clientOrigin}/?oauth_token=${encodeURIComponent(token)}&oauth_username=${encodeURIComponent(user.username)}&oauth_userId=${user.id}`);
+  } catch (err) {
+    console.error('[oauth:google]', err);
+    res.status(500).send('OAuth failed');
+  }
+});
+
+// ── GitHub OAuth ──────────────────────────────────────────────────────────────
+
+router.get('/github', (req: Request, res: Response) => {
+  const params = new URLSearchParams({
+    client_id: process.env.GITHUB_CLIENT_ID ?? '',
+    redirect_uri: `${process.env.OAUTH_CALLBACK_BASE ?? 'http://localhost:3001'}/auth/github/callback`,
+    scope: 'read:user user:email',
+  });
+  res.redirect(`https://github.com/login/oauth/authorize?${params}`);
+});
+
+router.get('/github/callback', async (req: Request, res: Response) => {
+  const code = req.query.code as string;
+  if (!code) { res.status(400).send('Missing code'); return; }
+
+  try {
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+      },
+      body: new URLSearchParams({
+        client_id: process.env.GITHUB_CLIENT_ID ?? '',
+        client_secret: process.env.GITHUB_CLIENT_SECRET ?? '',
+        code,
+        redirect_uri: `${process.env.OAUTH_CALLBACK_BASE ?? 'http://localhost:3001'}/auth/github/callback`,
+      }),
+    });
+    const tokenData = await tokenRes.json() as { access_token?: string };
+
+    if (!tokenData.access_token) { res.status(400).send('Failed to get GitHub access token'); return; }
+
+    const profileRes = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        'User-Agent': 'hum-app',
+      },
+    });
+    const profile = await profileRes.json() as { id?: number; login?: string; email?: string | null };
+
+    if (!profile.id) { res.status(400).send('OAuth profile missing id'); return; }
+
+    // Get primary email if not provided on the profile
+    let email = profile.email ?? undefined;
+    if (!email) {
+      const emailsRes = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          'User-Agent': 'hum-app',
+        },
+      });
+      const emails = await emailsRes.json() as Array<{ email: string; primary: boolean; verified: boolean }>;
+      const primary = emails.find(e => e.primary && e.verified);
+      email = primary?.email;
+    }
+
+    const oauthId = profile.id.toString();
+    let user = await queries.getUserByOAuth('github', oauthId);
+    if (!user) {
+      const baseUsername = (profile.login ?? 'user').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 28);
+      let username = baseUsername || 'user';
+      let attempt = 0;
+      while (await queries.getUserByUsername(username)) {
+        username = `${baseUsername}${++attempt}`;
+      }
+      await queries.createOAuthUser(username, 'github', oauthId, email);
+      user = await queries.getUserByOAuth('github', oauthId);
+      if (!user) { res.status(500).send('Failed to create user'); return; }
+    }
+
+    const token = signToken({ userId: user.id, username: user.username });
+    const clientOrigin = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
+    res.redirect(`${clientOrigin}/?oauth_token=${encodeURIComponent(token)}&oauth_username=${encodeURIComponent(user.username)}&oauth_userId=${user.id}`);
+  } catch (err) {
+    console.error('[oauth:github]', err);
+    res.status(500).send('OAuth failed');
+  }
+});
+
 export default router;

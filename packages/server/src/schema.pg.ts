@@ -10,7 +10,11 @@ export const users = pgTable('users', {
   avatar_url: text('avatar_url'),
   created_at: integer('created_at').notNull().default(sql`extract(epoch from now())::int`),
   last_seen_at: integer('last_seen_at'),
-});
+  oauth_provider: text('oauth_provider'),
+  oauth_id: text('oauth_id'),
+}, (table) => [
+  uniqueIndex('users_oauth_unique').on(table.oauth_provider, table.oauth_id),
+]);
 
 export const spaces = pgTable('spaces', {
   id: serial('id').primaryKey(),
