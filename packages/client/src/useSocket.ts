@@ -1,6 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-export interface HumMessage { /* TEST */
+export interface ReactionGroup {
+  emoji: string;
+  userIds: number[];
+  usernames: string[];
+}
+
+export interface HumMessage {
   id: number;
   spaceId: number;
   channelId: string;
@@ -9,6 +15,12 @@ export interface HumMessage { /* TEST */
   content: string;
   createdAt: number;
   editedAt?: number;
+  reactions?: ReactionGroup[];
+}
+
+export interface ReactionEvent {
+  type: 'message:reaction';
+  reaction: { messageId: number; emoji: string; userId: number; username: string; action: 'add' | 'remove' };
 }
 
 export interface VoicePeer {
@@ -19,6 +31,9 @@ export interface VoicePeer {
 export type VoiceServerEvent =
   | { type: 'voice:joined'; spaceId: number; channelId: string; peers: VoicePeer[] }
   | { type: 'voice:presence'; spaceId: number; channelId: string; peers: VoicePeer[] }
+  | { type: 'voice:offer'; fromUserId: number; sdp: RTCSessionDescriptionInit }
+  | { type: 'voice:answer'; fromUserId: number; sdp: RTCSessionDescriptionInit }
+  | { type: 'voice:ice'; fromUserId: number; candidate: RTCIceCandidateInit }
   | { type: 'voice:peer_left'; userId: number };
 
 export interface PresenceUpdate {
@@ -50,7 +65,8 @@ type ServerEvent =
   | VoiceServerEvent
   | PresenceUpdate
   | MentionEvent
-  | ChannelNewMessageEvent;
+  | ChannelNewMessageEvent
+  | ReactionEvent;
 
 interface UseSocketOptions {
   token: string;
@@ -66,9 +82,10 @@ interface UseSocketOptions {
   onPresenceUpdate?: (update: PresenceUpdate) => void;
   onMention?: (event: MentionEvent) => void;
   onChannelNewMessage?: (event: ChannelNewMessageEvent) => void;
+  onReaction?: (event: ReactionEvent) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage, onReaction }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -100,6 +117,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
   const onChannelNewMessageRef = useRef(onChannelNewMessage);
   onChannelNewMessageRef.current = onChannelNewMessage;
 
+  const onReactionRef = useRef(onReaction);
+  onReactionRef.current = onReaction;
+
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
@@ -112,6 +132,10 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
 
   const sendTypingStart = useCallback(() => send({ type: 'typing_start' }), [send]);
   const sendTypingStop = useCallback(() => send({ type: 'typing_stop' }), [send]);
+
+  const toggleReaction = useCallback((messageId: number, emoji: string) => {
+    send({ type: 'reaction:toggle', messageId, emoji });
+  }, [send]);
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -149,6 +173,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       else if (event.type === 'channel:new_message') {
         onChannelNewMessageRef.current?.(event as ChannelNewMessageEvent);
       }
+      else if (event.type === 'message:reaction') {
+        onReactionRef.current?.(event as ReactionEvent);
+      }
       else if (event.type.startsWith('voice:')) {
         onVoiceEventRef.current?.(event as VoiceServerEvent);
       }
@@ -170,5 +197,5 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
     }
   }, [spaceId, channelId, token]);
 
-  return { sendMessage, sendTypingStart, sendTypingStop, send };
+  return { sendMessage, sendTypingStart, sendTypingStop, send, toggleReaction };
 }

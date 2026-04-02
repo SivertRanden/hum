@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent } from './useSocket.js';
 import { useLiveKitVoice } from './useLiveKitVoice.js';
 
 import {
@@ -210,6 +210,53 @@ function renderMessageContent(content: string, myUsername: string): React.ReactN
   });
 }
 
+// ── Reaction pills ────────────────────────────────────────────────────────────
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+interface ReactionPillsProps {
+  reactions: ReactionGroup[];
+  myUserId: number;
+  onToggle: (emoji: string) => void;
+}
+
+function ReactionPills({ reactions, myUserId, onToggle }: ReactionPillsProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  return (
+    <div className="msg-reactions">
+      {reactions.map(rg => {
+        const mine = rg.userIds.includes(myUserId);
+        return (
+          <button
+            key={rg.emoji}
+            className={`reaction-pill${mine ? ' mine' : ''}`}
+            onClick={() => onToggle(rg.emoji)}
+            title={rg.usernames.join(', ')}
+          >
+            {rg.emoji} {rg.userIds.length}
+          </button>
+        );
+      })}
+      <div className="reaction-add-wrap">
+        <button className="reaction-add-btn" onClick={() => setPickerOpen(p => !p)} title="Add reaction">+</button>
+        {pickerOpen && (
+          <div className="reaction-picker">
+            {QUICK_EMOJIS.map(e => (
+              <button
+                key={e}
+                className="reaction-quick-btn"
+                onClick={() => { onToggle(e); setPickerOpen(false); }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Message list ─────────────────────────────────────────────────────────────
 interface MessageListProps {
   messages: HumMessage[];
@@ -219,9 +266,11 @@ interface MessageListProps {
   activeSpaceId: number | null;
   onEditMessage: (id: number, content: string) => void;
   onDeleteMessage: (id: number) => void;
+  reactions: Record<number, ReactionGroup[]>;
+  onToggleReaction: (messageId: number, emoji: string) => void;
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage }: MessageListProps) {
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage, reactions, onToggleReaction }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -298,6 +347,11 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onE
                   <button className="msg-action-btn msg-action-delete" onClick={() => void handleDelete(m)} title="Delete">✕</button>
                 </span>
               )}
+              <ReactionPills
+                reactions={reactions[m.id] ?? []}
+                myUserId={myUserId}
+                onToggle={(emoji) => onToggleReaction(m.id, emoji)}
+              />
             </>
           )}
           <span className="msg-time">{new Date(m.createdAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -426,6 +480,7 @@ export default function App() {
   const isTypingRef = useRef(false);
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
+  const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
   activeSpaceIdRef.current = activeSpaceId;
@@ -492,6 +547,7 @@ export default function App() {
     setActiveChannelId(DEFAULT_CHANNEL);
     setMessages([]);
     setMobileView('channels');
+    setReactions({});
   };
 
   const handleCreateChannel = async (name: string, type: 'text' | 'voice') => {
@@ -526,6 +582,7 @@ export default function App() {
     setActiveChannelId(id);
     if (!isVoiceChannel(id)) {
       setMessages([]);
+      setReactions({});
       // Clear unread for this channel
       setUnreadCounts(prev => {
         const next = new Map(prev);
@@ -546,6 +603,14 @@ export default function App() {
 
   const onHistory = useCallback((msgs: HumMessage[]) => {
     setMessages(msgs);
+    // Extract reactions embedded in history messages
+    const initialReactions: Record<number, ReactionGroup[]> = {};
+    for (const msg of msgs) {
+      if (msg.reactions && msg.reactions.length > 0) {
+        initialReactions[msg.id] = msg.reactions;
+      }
+    }
+    setReactions(initialReactions);
     if (msgs.length > 0 && auth && activeSpaceIdRef.current) {
       const lastId = msgs[msgs.length - 1].id;
       const ch = activeChannelIdRef.current;
@@ -566,6 +631,28 @@ export default function App() {
       const next = new Map(prev);
       next.set(event.channelId, (next.get(event.channelId) ?? 0) + 1);
       return next;
+    });
+  }, []);
+
+  const onReaction = useCallback((event: ReactionEvent) => {
+    const { messageId, emoji, userId, username, action } = event.reaction;
+    setReactions(prev => {
+      const groups = [...(prev[messageId] ?? [])];
+      const idx = groups.findIndex(g => g.emoji === emoji);
+      if (action === 'add') {
+        if (idx === -1) {
+          groups.push({ emoji, userIds: [userId], usernames: [username] });
+        } else if (!groups[idx].userIds.includes(userId)) {
+          groups[idx] = { ...groups[idx], userIds: [...groups[idx].userIds, userId], usernames: [...groups[idx].usernames, username] };
+        }
+      } else {
+        if (idx !== -1) {
+          const updated = { ...groups[idx], userIds: groups[idx].userIds.filter(id => id !== userId), usernames: groups[idx].usernames.filter(n => n !== username) };
+          if (updated.userIds.length === 0) groups.splice(idx, 1);
+          else groups[idx] = updated;
+        }
+      }
+      return { ...prev, [messageId]: groups };
     });
   }, []);
 
@@ -618,7 +705,7 @@ export default function App() {
 
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
 
-  const { sendMessage, sendTypingStart, sendTypingStop, send } = useSocket(
+  const { sendMessage, sendTypingStart, sendTypingStop, send, toggleReaction } = useSocket(
     auth
       ? {
           token: auth.token,
@@ -634,6 +721,7 @@ export default function App() {
           onPresenceUpdate,
           onMention,
           onChannelNewMessage,
+          onReaction,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -795,6 +883,8 @@ export default function App() {
                   activeSpaceId={activeSpaceId}
                   onEditMessage={handleEditMessage}
                   onDeleteMessage={handleDeleteMessage}
+                  reactions={reactions}
+                  onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
                 />
                 {typingUsers.size > 0 && (
                   <div className="typing-indicator">

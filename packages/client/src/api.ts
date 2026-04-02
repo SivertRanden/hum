@@ -63,6 +63,13 @@ export interface Channel {
   created_at: number;
 }
 
+export interface UserProfile {
+  id: number;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 export interface SpaceMember {
   id: number;
   space_id: number;
@@ -125,6 +132,25 @@ export const api = {
 
   getUnreadCounts: (token: string, spaceId: number) =>
     get<Record<string, number>>(`/spaces/${spaceId}/unread`, token),
+
+  updateUserProfile: (token: string, userId: number, displayName: string | null) =>
+    patch<UserProfile>(`/users/${userId}/profile`, { displayName }, token),
+
+  uploadAvatar: async (token: string, userId: number, file: File): Promise<{ avatarUrl: string }> => {
+    const form = new FormData();
+    form.append('avatar', file);
+    const res = await fetch(`${BASE}/users/${userId}/avatar`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json() as { avatarUrl: string; error?: string };
+    if (!res.ok) throw new Error(data.error ?? 'Upload failed');
+    return data;
+  },
+
+  deleteAvatar: (token: string, userId: number) =>
+    del(`/users/${userId}/avatar`, token),
 
   markChannelRead: async (token: string, spaceId: number, channel: string, lastReadMessageId: number): Promise<void> => {
     await fetch(`${BASE}/spaces/${spaceId}/channels/${encodeURIComponent(channel)}/read`, {
