@@ -12,6 +12,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': apiUrl,
+      '/auth': apiUrl,
       '/ws': { target: wsUrl, ws: true },
     },
   },
