@@ -863,3 +863,141 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--text-dim, #666);
   opacity: 0.5;
 }
+
+/* ── Mobile-responsive layout ──────────────────────────────────────────── */
+
+/* By default, hide mobile-only controls */
+.mobile-back-btn {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* Show mobile back buttons */
+  .mobile-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius);
+    flex-shrink: 0;
+    margin-right: 6px;
+  }
+
+  .mobile-back-btn:hover {
+    background: var(--surface2);
+  }
+
+  /* App shell: single-column on mobile */
+  .app-shell {
+    grid-template-columns: 1fr;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* All three columns take full width */
+  .server-rail,
+  .channel-sidebar,
+  .main {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.2s ease;
+  }
+
+  /* Default: show servers panel */
+  .app-shell[data-mobile-view="servers"] .server-rail {
+    transform: translateX(0);
+  }
+  .app-shell[data-mobile-view="servers"] .channel-sidebar {
+    transform: translateX(100%);
+  }
+  .app-shell[data-mobile-view="servers"] .main {
+    transform: translateX(200%);
+  }
+
+  /* Channels panel active */
+  .app-shell[data-mobile-view="channels"] .server-rail {
+    transform: translateX(-100%);
+  }
+  .app-shell[data-mobile-view="channels"] .channel-sidebar {
+    transform: translateX(0);
+  }
+  .app-shell[data-mobile-view="channels"] .main {
+    transform: translateX(100%);
+  }
+
+  /* Chat panel active */
+  .app-shell[data-mobile-view="chat"] .server-rail {
+    transform: translateX(-200%);
+  }
+  .app-shell[data-mobile-view="chat"] .channel-sidebar {
+    transform: translateX(-100%);
+  }
+  .app-shell[data-mobile-view="chat"] .main {
+    transform: translateX(0);
+  }
+
+  /* Server rail: full-width horizontal scrolling list on mobile */
+  .server-rail {
+    flex-direction: column;
+    width: 100%;
+    padding: 12px 0;
+    overflow-y: auto;
+  }
+
+  .server-rail-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0 12px 8px;
+  }
+
+  .server-btn {
+    width: 56px;
+    height: 56px;
+  }
+
+  /* Main header: show back button space */
+  .main-header {
+    gap: 6px;
+  }
+
+  /* Touch-friendly channel items */
+  .channel-item {
+    min-height: 44px;
+  }
+
+  /* Touch-friendly compose area */
+  .compose {
+    padding: 8px;
+  }
+
+  /* Larger touch targets for message actions */
+  .msg-action-btn {
+    padding: 6px 8px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  /* Prevent overflow on small screens */
+  .message {
+    max-width: 100%;
+  }
+
+  .msg-content {
+    word-break: break-word;
+  }
+}
+
+/* Slightly wider mobile layout for tablets */
+@media (min-width: 641px) and (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 56px 180px 1fr;
+  }
+}

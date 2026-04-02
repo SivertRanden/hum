@@ -15,6 +15,7 @@ interface ChannelSidebarProps {
   activeVoiceRoomId: string | null;
   members: SpaceMember[];
   onCreateInvite: () => Promise<string>;
+  onMobileBack?: () => void;
 }
 
 function channelClientId(ch: Channel): string {
@@ -83,6 +84,7 @@ export function ChannelSidebar({
   activeVoiceRoomId,
   members,
   onCreateInvite,
+  onMobileBack,
 }: ChannelSidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -122,6 +124,11 @@ export function ChannelSidebar({
   return (
     <div className="channel-sidebar">
       <div className="channel-sidebar-header">
+        {onMobileBack && (
+          <button className="mobile-back-btn" onClick={onMobileBack} aria-label="Back to servers">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </button>
+        )}
         {server ? (
           <span className="channel-server-name">{server.name}</span>
         ) : (

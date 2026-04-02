@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ReactionUpdateEvent } from './useSocket.js';
 import { useVoiceChat } from './useVoiceChat.js';
 import {
   Button,
@@ -107,11 +107,15 @@ interface MessageListProps {
   myUsername: string;
   token: string;
   activeSpaceId: number | null;
+  reactions: Record<number, Array<{ emoji: string; user_id: number; username: string }>>;
+  onReactionToggle: (messageId: number, emoji: string) => void;
   onEditMessage: (id: number, content: string) => void;
   onDeleteMessage: (id: number) => void;
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onEditMessage, onDeleteMessage }: MessageListProps) {
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, reactions, onReactionToggle, onEditMessage, onDeleteMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -181,6 +185,30 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, onE
               <span className="msg-content">
                 {renderMessageContent(m.content, myUsername)}
                 {m.editedAt && <span className="msg-edited"> (edited)</span>}
+              </span>
+              <span className="msg-reactions">
+                {Object.entries(
+                  (reactions[m.id] ?? []).reduce<Record<string, { count: number; hasMe: boolean }>>((acc, r) => {
+                    if (!acc[r.emoji]) acc[r.emoji] = { count: 0, hasMe: false };
+                    acc[r.emoji].count++;
+                    if (r.user_id === myUserId) acc[r.emoji].hasMe = true;
+                    return acc;
+                  }, {})
+                ).map(([emoji, { count, hasMe }]) => (
+                  <button
+                    key={emoji}
+                    className={`reaction-pill ${hasMe ? 'mine' : ''}`}
+                    onClick={() => onReactionToggle(m.id, emoji)}
+                    title={`${count} reaction${count !== 1 ? 's' : ''}`}
+                  >
+                    {emoji} {count}
+                  </button>
+                ))}
+                <span className="reaction-picker-trigger">
+                  {QUICK_EMOJIS.map(e => (
+                    <button key={e} className="reaction-quick-btn" onClick={() => onReactionToggle(m.id, e)}>{e}</button>
+                  ))}
+                </span>
               </span>
               {m.userId === myUserId && (
                 <span className="msg-actions">
@@ -299,8 +327,10 @@ export default function App() {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string>(DEFAULT_CHANNEL);
+  const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<HumMessage[]>([]);
+  const [reactions, setReactions] = useState<Record<number, Array<{ emoji: string; user_id: number; username: string }>>>({});
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [input, setInput] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
@@ -363,6 +393,7 @@ export default function App() {
     setActiveSpaceId(id);
     setActiveChannelId(DEFAULT_CHANNEL);
     setMessages([]);
+    setMobileView('channels');
   };
 
   const handleCreateChannel = async (name: string, type: 'text' | 'voice') => {
@@ -396,6 +427,7 @@ export default function App() {
   const handleSelectChannel = (id: string) => {
     setActiveChannelId(id);
     if (!isVoiceChannel(id)) setMessages([]);
+    setMobileView('chat');
   };
 
   const onMessage = useCallback((msg: HumMessage) => {
@@ -457,9 +489,13 @@ export default function App() {
     setTypingUsers(new Map());
   }, [activeChannelId, activeSpaceId]);
 
+  const onReactionUpdate = useCallback((evt: ReactionUpdateEvent) => {
+    setReactions(prev => ({ ...prev, [evt.messageId]: evt.reactions }));
+  }, []);
+
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
 
-  const { sendMessage, sendTypingStart, sendTypingStop, send } = useSocket(
+  const { sendMessage, sendReactionToggle, sendTypingStart, sendTypingStop, send } = useSocket(
     auth
       ? {
           token: auth.token,
@@ -474,6 +510,7 @@ export default function App() {
           onTyping,
           onPresenceUpdate,
           onMention,
+          onReactionUpdate,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
@@ -556,7 +593,7 @@ export default function App() {
   const inVoice = isVoiceChannel(activeChannelId);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-mobile-view={mobileView}>
       {/* Column 1: server rail */}
       <ServerRail
         servers={spaces}
@@ -580,6 +617,7 @@ export default function App() {
         activeVoiceRoomId={isInRoom ? activeChannelId : null}
         members={members}
         onCreateInvite={handleCreateInvite}
+        onMobileBack={() => setMobileView('servers')}
       />
 
       {/* Column 3: main content */}
@@ -587,6 +625,9 @@ export default function App() {
         {activeSpace ? (
           <>
             <header className="main-header">
+              <button className="mobile-back-btn" onClick={() => setMobileView('channels')} aria-label="Back to channels">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+              </button>
               <span className="main-header-icon" aria-hidden>
                 {inVoice
                   ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
@@ -616,6 +657,8 @@ export default function App() {
                   myUsername={auth.username}
                   token={auth.token}
                   activeSpaceId={activeSpaceId}
+                  reactions={reactions}
+                  onReactionToggle={(messageId, emoji) => sendReactionToggle(messageId, emoji)}
                   onEditMessage={handleEditMessage}
                   onDeleteMessage={handleDeleteMessage}
                 />
