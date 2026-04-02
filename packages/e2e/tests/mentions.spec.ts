@@ -36,7 +36,7 @@ test.describe('@mentions', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     const msg = `Hello @${username} how are you`;
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose input:not([type="file"])').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
 
     // The @mention token should be wrapped in a .mention span
@@ -52,7 +52,7 @@ test.describe('@mentions', () => {
 
     // Send a message that mentions yourself
     const msg = `@${username} reminder to self`;
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose input:not([type="file"])').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
 
     // The span should have both .mention and .mention-me
@@ -79,7 +79,7 @@ test.describe('@mentions', () => {
 
     // User A sends a message mentioning User B
     const msg = `Hey @${usernameB} check this out`;
-    await pageA.locator('.compose input').fill(msg);
+    await pageA.locator('.compose input:not([type="file"])').fill(msg);
     await pageA.getByRole('button', { name: /^send$/i }).click();
 
     // User B should see the mention highlighted with mention-me
@@ -102,7 +102,7 @@ test.describe('@mentions', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     const msg = `ping @${username} please respond`;
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose input:not([type="file"])').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
 
     // The full message should appear and contain the mention span
