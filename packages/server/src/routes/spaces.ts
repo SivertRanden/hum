@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
+import { AccessToken } from 'livekit-server-sdk';
 import { queries, Channel } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware.js';
 import { broadcast, getOnlineUserIds } from '../ws.js';
@@ -198,6 +199,93 @@ router.post('/:id/invites', requireAuth, async (req: AuthRequest, res: Response)
   const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 7 days
   await queries.createInviteToken(token, spaceId, req.user!.userId, expiresAt);
   res.status(201).json({ token, expiresAt });
+});
+
+router.get('/:id/channels/:channelId/voice-token', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const { channelId } = req.params;
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const apiKey = process.env.LIVEKIT_API_KEY;
+  const apiSecret = process.env.LIVEKIT_API_SECRET;
+  const livekitUrl = process.env.LIVEKIT_URL;
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    res.status(503).json({ error: 'voice service unavailable' });
+    return;
+  }
+
+  const roomName = `${spaceId}:${channelId}`;
+  const identity = String(req.user!.userId);
+
+  const at = new AccessToken(apiKey, apiSecret, {
+    identity,
+    name: req.user!.username,
+    ttl: 3600,
+  });
+  at.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true });
+
+  const token = await at.toJwt();
+  res.json({ token, url: livekitUrl });
+});
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+
+router.post('/:id/messages/:messageId/reactions', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+  const { emoji } = req.body as { emoji?: string };
+
+  if (!emoji?.trim()) { res.status(400).json({ error: 'emoji required' }); return; }
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  await queries.addReaction(messageId, req.user!.userId, emoji.trim());
+
+  broadcast(spaceId, message.channel, {
+    type: 'message:reaction',
+    reaction: {
+      messageId,
+      emoji: emoji.trim(),
+      userId: req.user!.userId,
+      username: req.user!.username,
+      action: 'add',
+    },
+  });
+
+  res.status(204).end();
+});
+
+router.delete('/:id/messages/:messageId/reactions/:emoji', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+  const emoji = decodeURIComponent(req.params.emoji);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  await queries.removeReaction(messageId, req.user!.userId, emoji);
+
+  broadcast(spaceId, message.channel, {
+    type: 'message:reaction',
+    reaction: {
+      messageId,
+      emoji,
+      userId: req.user!.userId,
+      username: req.user!.username,
+      action: 'remove',
+    },
+  });
+
+  res.status(204).end();
 });
 
 export default router;
