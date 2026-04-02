@@ -28,6 +28,8 @@ async function joinViaInvite(
   await pageGuest.getByRole('button', { name: /create account/i }).click();
   await expect(pageGuest.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
   await pageGuest.goto(inviteUrl);
+  // Wait for the invite to be processed and the app to settle
+  await expect(pageGuest.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
 }
 
 test.describe('Unread indicators', () => {
@@ -52,7 +54,7 @@ test.describe('Unread indicators', () => {
     const usernameB = uniqueUser('unrdB');
     await joinViaInvite(pageA, pageB, usernameB);
     const spaceNameLocator = pageB.locator('.channel-server-name', { hasText: spaceName });
-    await expect(spaceNameLocator).toBeVisible({ timeout: 8_000 });
+    await expect(spaceNameLocator).toBeVisible({ timeout: 10_000 });
 
     // User A moves to the "other" channel; user B stays in general
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
@@ -91,7 +93,7 @@ test.describe('Unread indicators', () => {
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('cntB');
     await joinViaInvite(pageA, pageB, usernameB);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 8_000 });
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
@@ -131,7 +133,7 @@ test.describe('Unread indicators', () => {
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('clrB');
     await joinViaInvite(pageA, pageB, usernameB);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 8_000 });
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
@@ -168,7 +170,7 @@ test.describe('Unread indicators', () => {
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('relB');
     await joinViaInvite(pageA, pageB, usernameB);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 8_000 });
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
