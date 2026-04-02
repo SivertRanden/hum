@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
 import { migrate as migrateSqlite } from 'drizzle-orm/better-sqlite3/migrator';
-import { eq, and, isNull, asc, desc, sql, inArray, ne } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, asc, desc, sql, inArray, ne } from 'drizzle-orm';
 import * as sqliteSchema from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -76,6 +76,7 @@ export interface Message {
   created_at: number;
   updated_at: number | null;
   deleted_at: number | null;
+  pinned_at?: number | null;
   username?: string;
   display_name?: string | null;
   avatar_url?: string | null;
@@ -222,6 +223,10 @@ export interface Queries {
   listDmChannels(space_id: number, user_id: number): Promise<DmChannel[]>;
   isUserDmMember(channel_id: number, user_id: number): Promise<boolean>;
 
+  pinMessage(id: number): Promise<boolean>;
+  unpinMessage(id: number): Promise<boolean>;
+  getPinnedMessages(space_id: number, channel: string): Promise<Message[]>;
+
   searchMessages(space_id: number, query: string, channel: string | null, limit: number): Promise<SearchResult[]>;
 
   getThread(space_id: number, message_id: number): Promise<{ parent: Message; replies: ThreadReply[] } | undefined>;
@@ -352,6 +357,7 @@ function buildSqliteQueries(): Queries {
   try { rawDb.exec('ALTER TABLE channels ADD COLUMN topic TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN display_name TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE messages ADD COLUMN pinned_at INTEGER'); } catch { /* already exists */ }
 
   // Data migrations: seed defaults for existing rows
   rawDb.exec(`
@@ -534,6 +540,49 @@ function buildSqliteQueries(): Queries {
         .where(and(eq(messages.id, id), eq(messages.user_id, user_id), isNull(messages.deleted_at)))
         .run();
       return result.changes > 0;
+    },
+
+    pinMessage: async (id) => {
+      const result = db.update(messages)
+        .set({ pinned_at: nowEpoch })
+        .where(and(eq(messages.id, id), isNull(messages.deleted_at)))
+        .run();
+      return result.changes > 0;
+    },
+
+    unpinMessage: async (id) => {
+      const result = db.update(messages)
+        .set({ pinned_at: null })
+        .where(and(eq(messages.id, id), isNull(messages.deleted_at)))
+        .run();
+      return result.changes > 0;
+    },
+
+    getPinnedMessages: async (space_id, channel) => {
+      return db.select({
+        id: messages.id,
+        space_id: messages.space_id,
+        user_id: messages.user_id,
+        channel: messages.channel,
+        content: messages.content,
+        link_previews: messages.link_previews,
+        reply_count: messages.reply_count,
+        created_at: messages.created_at,
+        updated_at: messages.updated_at,
+        deleted_at: messages.deleted_at,
+        pinned_at: messages.pinned_at,
+        username: users.username,
+      })
+        .from(messages)
+        .innerJoin(users, eq(messages.user_id, users.id))
+        .where(and(
+          eq(messages.space_id, space_id),
+          eq(messages.channel, channel),
+          isNull(messages.deleted_at),
+          isNotNull(messages.pinned_at),
+        ))
+        .orderBy(asc(messages.pinned_at))
+        .all() as Message[];
     },
 
     storeLinkPreviews: async (message_id, previews_json) => {
@@ -1076,6 +1125,48 @@ async function buildPgQueries(): Promise<Queries> {
         .where(and(eq(messages.id, id), eq(messages.user_id, user_id), isNull(messages.deleted_at)))
         .returning({ id: messages.id });
       return rows.length > 0;
+    },
+
+    pinMessage: async (id) => {
+      const rows = await db.update(messages)
+        .set({ pinned_at: nowEpoch })
+        .where(and(eq(messages.id, id), isNull(messages.deleted_at)))
+        .returning({ id: messages.id });
+      return rows.length > 0;
+    },
+
+    unpinMessage: async (id) => {
+      const rows = await db.update(messages)
+        .set({ pinned_at: null })
+        .where(and(eq(messages.id, id), isNull(messages.deleted_at)))
+        .returning({ id: messages.id });
+      return rows.length > 0;
+    },
+
+    getPinnedMessages: async (space_id, channel) => {
+      return db.select({
+        id: messages.id,
+        space_id: messages.space_id,
+        user_id: messages.user_id,
+        channel: messages.channel,
+        content: messages.content,
+        link_previews: messages.link_previews,
+        reply_count: messages.reply_count,
+        created_at: messages.created_at,
+        updated_at: messages.updated_at,
+        deleted_at: messages.deleted_at,
+        pinned_at: messages.pinned_at,
+        username: users.username,
+      })
+        .from(messages)
+        .innerJoin(users, eq(messages.user_id, users.id))
+        .where(and(
+          eq(messages.space_id, space_id),
+          eq(messages.channel, channel),
+          isNull(messages.deleted_at),
+          isNotNull(messages.pinned_at),
+        ))
+        .orderBy(asc(messages.pinned_at)) as Promise<Message[]>;
     },
 
     storeLinkPreviews: async (message_id, previews_json) => {

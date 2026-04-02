@@ -43,6 +43,7 @@ export const messages = sqliteTable('messages', {
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
   updated_at: integer('updated_at'),
   deleted_at: integer('deleted_at'),
+  pinned_at: integer('pinned_at'),
 }, (table) => [
   index('idx_messages_space_id').on(table.space_id, table.channel, table.created_at),
 ]);

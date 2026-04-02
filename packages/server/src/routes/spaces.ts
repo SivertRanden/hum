@@ -194,6 +194,52 @@ router.delete('/:id/messages/:messageId', requireAuth, async (req: AuthRequest, 
   res.status(204).end();
 });
 
+// ── Pinned messages ──────────────────────────────────────────────────────────
+
+router.patch('/:id/messages/:messageId/pin', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const ok = await queries.pinMessage(messageId);
+  if (!ok) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const fresh = await queries.getMessageById(messageId);
+  res.json({ id: messageId, pinnedAt: fresh?.pinned_at ?? null });
+});
+
+router.patch('/:id/messages/:messageId/unpin', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  const ok = await queries.unpinMessage(messageId);
+  if (!ok) { res.status(404).json({ error: 'message not found' }); return; }
+
+  res.json({ id: messageId, pinnedAt: null });
+});
+
+router.get('/:id/channels/:channelName/pinned', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const channelName = req.params.channelName;
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const pinned = await queries.getPinnedMessages(spaceId, channelName);
+  res.json(pinned);
+});
+
 // ── Full-text search ─────────────────────────────────────────────────────────
 
 router.get('/:id/search', requireAuth, async (req: AuthRequest, res: Response) => {

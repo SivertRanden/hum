@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, UserProfile, SpaceEmoji } from './api.js';
+import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, UserProfile, SpaceEmoji, PinnedMessage } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
@@ -228,6 +228,15 @@ function renderMessageContent(content: string, myUsername: string, spaceEmoji?: 
   });
 }
 
+// ── Pin icon ─────────────────────────────────────────────────────────────────
+function PinIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+    </svg>
+  );
+}
+
 // ── Link preview card ─────────────────────────────────────────────────────────
 
 function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
@@ -321,6 +330,7 @@ interface MessageListProps {
   openThreadMessageId: number | null;
   onEditMessage: (id: number, content: string) => void;
   onDeleteMessage: (id: number) => void;
+  onPinToggle: (id: number, pinned: boolean) => void;
   reactions: Record<number, ReactionGroup[]>;
   onToggleReaction: (messageId: number, emoji: string) => void;
   linkPreviews: Record<number, LinkPreview[]>;
@@ -328,7 +338,7 @@ interface MessageListProps {
   spaceEmoji?: SpaceEmoji[];
 }
 
-function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, reactions, onToggleReaction, linkPreviews, onOpenThread, spaceEmoji }: MessageListProps) {
+function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, openThreadMessageId, onEditMessage, onDeleteMessage, onPinToggle, reactions, onToggleReaction, linkPreviews, onOpenThread, spaceEmoji }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -379,6 +389,21 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
     }
   };
 
+  const handlePinToggle = async (msg: HumMessage) => {
+    if (!activeSpaceId) return;
+    try {
+      if (msg.pinnedAt) {
+        await api.unpinMessage(token, activeSpaceId, msg.id);
+        onPinToggle(msg.id, false);
+      } else {
+        await api.pinMessage(token, activeSpaceId, msg.id);
+        onPinToggle(msg.id, true);
+      }
+    } catch (err) {
+      console.error('[pin]', err);
+    }
+  };
+
   if (messages.length === 0) {
     return <div className="empty-state">no messages yet. say something.</div>;
   }
@@ -386,7 +411,8 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
   return (
     <div className="message-list">
       {messages.map(m => (
-        <div key={m.id} className={`message ${m.userId === myUserId ? 'mine' : ''}`}>
+        <div key={m.id} className={`message ${m.userId === myUserId ? 'mine' : ''}${m.pinnedAt ? ' pinned' : ''}`}>
+          {m.pinnedAt && <span className="msg-pin-indicator" title="Pinned message"><PinIcon size={12} /></span>}
           <span className="msg-username" style={{ cursor: 'pointer' }} onClick={() => void handleUsernameClick(m.userId)}>{m.username}</span>
           {editingId === m.id ? (
             <span className="msg-edit-form">
@@ -431,6 +457,13 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
               )}
               <span className="msg-actions">
                 <button className="msg-action-btn msg-action-reply" onClick={() => onOpenThread(m)} title="Reply in thread">↩</button>
+                <button
+                  className={`msg-action-btn msg-action-pin${m.pinnedAt ? ' active' : ''}`}
+                  onClick={() => void handlePinToggle(m)}
+                  title={m.pinnedAt ? 'Unpin' : 'Pin'}
+                >
+                  <PinIcon size={11} />
+                </button>
                 {m.userId === myUserId && (
                   <>
                     <button className="msg-action-btn" onClick={() => startEdit(m)} title="Edit">✎</button>
@@ -467,6 +500,36 @@ function MessageList({ messages, myUserId, myUsername, token, activeSpaceId, ope
           onProfileUpdate={(updated) => setSelectedProfile(updated)}
         />
       )}
+    </div>
+  );
+}
+
+// ── Pinned messages panel ─────────────────────────────────────────────────────
+interface PinnedPanelProps {
+  pinnedMessages: PinnedMessage[];
+  onClose: () => void;
+}
+
+function PinnedPanel({ pinnedMessages, onClose }: PinnedPanelProps) {
+  return (
+    <div className="pinned-panel">
+      <div className="pinned-panel-header">
+        <span className="pinned-panel-title"><PinIcon size={14} /> Pinned Messages</span>
+        <button className="pinned-panel-close" onClick={onClose} title="Close">✕</button>
+      </div>
+      <div className="pinned-panel-body">
+        {pinnedMessages.length === 0 ? (
+          <div className="pinned-panel-empty">No pinned messages in this channel.</div>
+        ) : (
+          pinnedMessages.map(m => (
+            <div key={m.id} className="pinned-msg">
+              <span className="pinned-msg-username">{m.username ?? 'unknown'}</span>
+              <span className="pinned-msg-content">{m.content}</span>
+              <span className="pinned-msg-time">{new Date(m.created_at * 1000).toLocaleDateString()}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -839,6 +902,8 @@ export default function App() {
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
   const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPinnedPanel, setShowPinnedPanel] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
   const [reactions, setReactions] = useState<Record<number, ReactionGroup[]>>({});
   const [msgLinkPreviews, setMsgLinkPreviews] = useState<Record<number, LinkPreview[]>>({});
   const [dms, setDms] = useState<DmChannel[]>([]);
@@ -846,8 +911,12 @@ export default function App() {
   const [showEmojiManager, setShowEmojiManager] = useState(false);
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
+  const authRef = useRef(auth);
+  const membersRef = useRef(members);
   activeSpaceIdRef.current = activeSpaceId;
   activeChannelIdRef.current = activeChannelId;
+  authRef.current = auth;
+  membersRef.current = members;
 
   const handleAuth = useCallback((a: AuthState) => {
     localStorage.setItem('hum_auth', JSON.stringify(a));
@@ -1060,6 +1129,16 @@ export default function App() {
   }, []);
 
   const onPresenceUpdate = useCallback((update: PresenceUpdate) => {
+    // If the user isn't in our member list yet (e.g. they just joined the space),
+    // re-fetch the full member list so the DM picker shows them immediately.
+    if (!membersRef.current.some(m => m.user_id === update.userId)) {
+      const a = authRef.current;
+      const sid = activeSpaceIdRef.current;
+      if (a && sid) {
+        api.listMembers(a.token, sid).then(setMembers).catch(console.error);
+      }
+      return;
+    }
     setMembers(prev => prev.map(m =>
       m.user_id === update.userId
         ? { ...m, is_online: update.isOnline, last_seen_at: update.lastSeenAt }
@@ -1078,6 +1157,25 @@ export default function App() {
   const handleDeleteMessage = useCallback((id: number) => {
     setMessages(prev => prev.filter(m => m.id !== id));
   }, []);
+
+  const handlePinToggle = useCallback((id: number, pinned: boolean) => {
+    const now = pinned ? Math.floor(Date.now() / 1000) : null;
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, pinnedAt: now } : m));
+    if (!pinned) {
+      setPinnedMessages(prev => prev.filter(m => m.id !== id));
+    }
+  }, []);
+
+  const handleOpenPinnedPanel = async () => {
+    if (!auth || !activeSpaceId) return;
+    try {
+      const pinned = await api.getPinnedMessages(auth.token, activeSpaceId, activeChannelId);
+      setPinnedMessages(pinned);
+      setShowPinnedPanel(true);
+    } catch (err) {
+      console.error('[pinned]', err);
+    }
+  };
 
   const onTyping = useCallback((userId: number, username: string, isTyping: boolean) => {
     setTypingUsers(prev => {
@@ -1366,6 +1464,16 @@ export default function App() {
                   </svg>
                 </button>
               )}
+              {!inVoice && (
+                <button
+                  className={`header-pin-btn${showPinnedPanel ? ' active' : ''}`}
+                  onClick={() => showPinnedPanel ? setShowPinnedPanel(false) : void handleOpenPinnedPanel()}
+                  title="Pinned messages"
+                  aria-label="Pinned messages"
+                >
+                  <PinIcon size={16} />
+                </button>
+              )}
               <button
                 className="header-search-btn"
                 onClick={() => setShowSearch(true)}
@@ -1426,6 +1534,12 @@ export default function App() {
               />
             ) : (
               <>
+                {showPinnedPanel && (
+                  <PinnedPanel
+                    pinnedMessages={pinnedMessages}
+                    onClose={() => setShowPinnedPanel(false)}
+                  />
+                )}
                 <MessageList
                   messages={messages}
                   myUserId={auth.userId}
@@ -1435,6 +1549,7 @@ export default function App() {
                   openThreadMessageId={openThread?.id ?? null}
                   onEditMessage={handleEditMessage}
                   onDeleteMessage={handleDeleteMessage}
+                  onPinToggle={handlePinToggle}
                   reactions={reactions}
                   onToggleReaction={(messageId, emoji) => toggleReaction(messageId, emoji)}
                   linkPreviews={msgLinkPreviews}
