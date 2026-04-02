@@ -21,6 +21,7 @@
     "jsonwebtoken": "^9.0.2",
     "livekit-server-sdk": "^2.15.0",
     "postgres": "^3.4.8",
+    "resend": "^6.10.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {

@@ -35,7 +35,7 @@ test.describe('Typing indicators', () => {
     await pageB.goto('/');
     await pageB.getByRole('button', { name: /no account\? register/i }).click();
     await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password').fill('testpass123');
+    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
     await pageB.getByRole('button', { name: /create account/i }).click();
     await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
 
@@ -77,7 +77,7 @@ test.describe('Typing indicators', () => {
     await pageB.goto('/');
     await pageB.getByRole('button', { name: /no account\? register/i }).click();
     await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password').fill('testpass123');
+    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
     await pageB.getByRole('button', { name: /create account/i }).click();
     await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
     await pageB.goto(inviteToken);

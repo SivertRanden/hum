@@ -33,9 +33,10 @@ function voiceRoomName(id: string) {
 }
 
 // ── Auth screen ──────────────────────────────────────────────────────────────
-function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
+function AuthScreen({ onAuth, onForgotPassword }: { onAuth: (auth: AuthState) => void; onForgotPassword: () => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,7 +48,7 @@ function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
     try {
       const res = mode === 'login'
         ? await api.login(username, password)
-        : await api.register(username, password);
+        : await api.register(username, password, email || undefined);
       onAuth({ token: res.token, userId: res.user.id, username: res.user.username });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -65,6 +66,12 @@ function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
           value={username} onChange={e => setUsername(e.target.value)}
           placeholder="username" autoComplete="username" required
         />
+        {mode === 'register' && (
+          <Input
+            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="email (optional, for password reset)" autoComplete="email"
+          />
+        )}
         <Input
           type="password" value={password} onChange={e => setPassword(e.target.value)}
           placeholder="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required
@@ -76,11 +83,113 @@ function AuthScreen({ onAuth }: { onAuth: (auth: AuthState) => void }) {
         <Button
           type="button"
           variant="link"
-          onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
+          onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
         >
           {mode === 'login' ? 'no account? register' : 'have an account? sign in'}
         </Button>
+        {mode === 'login' && (
+          <Button type="button" variant="link" onClick={onForgotPassword}>
+            forgot password?
+          </Button>
+        )}
       </form>
+    </div>
+  );
+}
+
+// ── Forgot password screen ────────────────────────────────────────────────────
+function ForgotPasswordScreen({ onBack }: { onBack: () => void }) {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await api.forgotPassword(email);
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <h1 className="logo">hum</h1>
+      <p className="tagline">reset your password</p>
+      {sent ? (
+        <div className="auth-form">
+          <p style={{ textAlign: 'center', fontSize: '0.9rem' }}>
+            If that email is registered, a reset link has been sent. Check your inbox.
+          </p>
+          <Button type="button" variant="link" onClick={onBack}>back to sign in</Button>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="auth-form">
+          <Input
+            type="email" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="your email address" autoComplete="email" required
+          />
+          {error && <p className="error">{error}</p>}
+          <Button type="submit" disabled={loading}>{loading ? '…' : 'send reset link'}</Button>
+          <Button type="button" variant="link" onClick={onBack}>back to sign in</Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// ── Reset password screen ─────────────────────────────────────────────────────
+function ResetPasswordScreen({ token, onDone }: { token: string; onDone: () => void }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (password !== confirm) { setError('passwords do not match'); return; }
+    setLoading(true);
+    try {
+      await api.resetPassword(token, password);
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <h1 className="logo">hum</h1>
+      <p className="tagline">choose a new password</p>
+      {success ? (
+        <div className="auth-form">
+          <p style={{ textAlign: 'center', fontSize: '0.9rem' }}>Password updated! You can now sign in.</p>
+          <Button type="button" onClick={onDone}>sign in</Button>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="auth-form">
+          <Input
+            type="password" value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="new password" autoComplete="new-password" required
+          />
+          <Input
+            type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+            placeholder="confirm new password" autoComplete="new-password" required
+          />
+          {error && <p className="error">{error}</p>}
+          <Button type="submit" disabled={loading}>{loading ? '…' : 'update password'}</Button>
+        </form>
+      )}
     </div>
   );
 }
@@ -297,6 +406,11 @@ export default function App() {
     const stored = localStorage.getItem('hum_auth');
     return stored ? JSON.parse(stored) as AuthState : null;
   });
+
+  const [authView, setAuthView] = useState<'login' | 'forgot'>(() => 'login');
+
+  // Check for password reset token in URL
+  const resetToken = new URLSearchParams(window.location.search).get('reset_token');
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string>(DEFAULT_CHANNEL);
@@ -593,7 +707,19 @@ export default function App() {
     }
   };
 
-  if (!auth) return <AuthScreen onAuth={handleAuth} />;
+  if (!auth) {
+    if (resetToken) {
+      return <ResetPasswordScreen token={resetToken} onDone={() => {
+        // Clear the token from the URL and show login
+        window.history.replaceState({}, '', window.location.pathname);
+        setAuthView('login');
+      }} />;
+    }
+    if (authView === 'forgot') {
+      return <ForgotPasswordScreen onBack={() => setAuthView('login')} />;
+    }
+    return <AuthScreen onAuth={handleAuth} onForgotPassword={() => setAuthView('forgot')} />;
+  }
 
   const activeSpace = spaces.find(s => s.id === activeSpaceId) ?? null;
   const inVoice = isVoiceChannel(activeChannelId);
