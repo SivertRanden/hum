@@ -6,6 +6,14 @@ export interface ReactionGroup {
   usernames: string[];
 }
 
+export interface LinkPreview {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  siteName?: string;
+}
+
 export interface HumMessage {
   id: number;
   spaceId: number;
@@ -16,6 +24,7 @@ export interface HumMessage {
   createdAt: number;
   editedAt?: number;
   reactions?: ReactionGroup[];
+  linkPreviews?: LinkPreview[];
 }
 
 export interface ReactionEvent {
@@ -54,6 +63,11 @@ export interface ChannelNewMessageEvent {
   channelId: string;
 }
 
+export interface LinkPreviewEvent {
+  type: 'message:link_preview';
+  linkPreview: { messageId: number; previews: LinkPreview[] };
+}
+
 type ServerEvent =
   | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
@@ -66,7 +80,8 @@ type ServerEvent =
   | PresenceUpdate
   | MentionEvent
   | ChannelNewMessageEvent
-  | ReactionEvent;
+  | ReactionEvent
+  | LinkPreviewEvent;
 
 interface UseSocketOptions {
   token: string;
@@ -83,9 +98,10 @@ interface UseSocketOptions {
   onMention?: (event: MentionEvent) => void;
   onChannelNewMessage?: (event: ChannelNewMessageEvent) => void;
   onReaction?: (event: ReactionEvent) => void;
+  onLinkPreview?: (event: LinkPreviewEvent) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage, onReaction }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage, onReaction, onLinkPreview }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -119,6 +135,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
 
   const onReactionRef = useRef(onReaction);
   onReactionRef.current = onReaction;
+
+  const onLinkPreviewRef = useRef(onLinkPreview);
+  onLinkPreviewRef.current = onLinkPreview;
 
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -175,6 +194,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       }
       else if (event.type === 'message:reaction') {
         onReactionRef.current?.(event as ReactionEvent);
+      }
+      else if (event.type === 'message:link_preview') {
+        onLinkPreviewRef.current?.(event as LinkPreviewEvent);
       }
       else if (event.type.startsWith('voice:')) {
         onVoiceEventRef.current?.(event as VoiceServerEvent);

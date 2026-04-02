@@ -58,6 +58,7 @@ export interface Message {
   user_id: number;
   channel: string;
   content: string;
+  link_previews: string | null;
   created_at: number;
   updated_at: number | null;
   deleted_at: number | null;
@@ -136,6 +137,7 @@ export interface Queries {
   getMessageById(id: number): Promise<Message | undefined>;
   updateMessage(content: string, id: number, user_id: number): Promise<boolean>;
   softDeleteMessage(id: number, user_id: number): Promise<boolean>;
+  storeLinkPreviews(message_id: number, previews_json: string): Promise<void>;
 
   listSpaceMembers(space_id: number): Promise<(SpaceMember & { username: string; last_seen_at: number | null })[]>;
   addSpaceMember(space_id: number, user_id: number, role: string): Promise<void>;
@@ -181,6 +183,7 @@ function buildSqliteQueries(): Queries {
   try { rawDb.exec("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'"); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN updated_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN deleted_at INTEGER'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE messages ADD COLUMN link_previews TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN last_seen_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN display_name TEXT'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT'); } catch { /* already exists */ }
@@ -271,6 +274,7 @@ function buildSqliteQueries(): Queries {
         user_id: messages.user_id,
         channel: messages.channel,
         content: messages.content,
+        link_previews: messages.link_previews,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
@@ -299,6 +303,7 @@ function buildSqliteQueries(): Queries {
         user_id: messages.user_id,
         channel: messages.channel,
         content: messages.content,
+        link_previews: messages.link_previews,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
@@ -323,6 +328,13 @@ function buildSqliteQueries(): Queries {
         .where(and(eq(messages.id, id), eq(messages.user_id, user_id), isNull(messages.deleted_at)))
         .run();
       return result.changes > 0;
+    },
+
+    storeLinkPreviews: async (message_id, previews_json) => {
+      db.update(messages)
+        .set({ link_previews: previews_json })
+        .where(eq(messages.id, message_id))
+        .run();
     },
 
     listSpaceMembers: async (space_id) =>
@@ -594,6 +606,7 @@ async function buildPgQueries(): Promise<Queries> {
         user_id: messages.user_id,
         channel: messages.channel,
         content: messages.content,
+        link_previews: messages.link_previews,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
@@ -622,6 +635,7 @@ async function buildPgQueries(): Promise<Queries> {
         user_id: messages.user_id,
         channel: messages.channel,
         content: messages.content,
+        link_previews: messages.link_previews,
         created_at: messages.created_at,
         updated_at: messages.updated_at,
         deleted_at: messages.deleted_at,
@@ -648,6 +662,12 @@ async function buildPgQueries(): Promise<Queries> {
         .where(and(eq(messages.id, id), eq(messages.user_id, user_id), isNull(messages.deleted_at)))
         .returning({ id: messages.id });
       return rows.length > 0;
+    },
+
+    storeLinkPreviews: async (message_id, previews_json) => {
+      await db.update(messages)
+        .set({ link_previews: previews_json })
+        .where(eq(messages.id, message_id));
     },
 
     listSpaceMembers: async (space_id) => {

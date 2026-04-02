@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { verifyToken } from './auth.js';
 import { queries } from './db.js';
+import { extractUrls, fetchLinkPreview, LinkPreview } from './ogFetch.js';
 
 interface HumSocket extends WebSocket {
   userId?: number;
@@ -32,7 +33,10 @@ interface ReactionGroup {
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:peer_left'
-      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction';
+      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction'
+      | 'message:link_preview';
+  // link preview fields
+  linkPreview?: { messageId: number; previews: LinkPreview[] };
   spaceId?: number;
   channelId?: string;
   // typing indicator fields
@@ -48,6 +52,7 @@ interface ServerMessage {
     createdAt: number;
     editedAt?: number;
     reactions?: ReactionGroup[];
+    linkPreviews?: LinkPreview[];
   };
   messages?: ServerMessage['message'][];
   messageId?: number;
@@ -299,6 +304,10 @@ export function createWsServer(server: import('http').Server) {
               grouped.push({ emoji: r.emoji, userIds: [r.user_id], usernames: [r.username ?? ''] });
             }
           }
+          let linkPreviews: LinkPreview[] | undefined;
+          if (m.link_previews) {
+            try { linkPreviews = JSON.parse(m.link_previews) as LinkPreview[]; } catch { /* ignore */ }
+          }
           return {
             id: m.id,
             spaceId: m.space_id,
@@ -309,6 +318,7 @@ export function createWsServer(server: import('http').Server) {
             createdAt: m.created_at,
             editedAt: m.updated_at ?? undefined,
             reactions: grouped.length > 0 ? grouped : undefined,
+            linkPreviews,
           };
         });
 
@@ -350,6 +360,30 @@ export function createWsServer(server: import('http').Server) {
         };
 
         broadcast(socket.spaceId, socket.channelId, outbound);
+
+        // ── Async URL unfurling ───────────────────────────────────────────
+        {
+          const urls = extractUrls(content);
+          if (urls.length > 0) {
+            const spaceId = socket.spaceId;
+            const channelId = socket.channelId;
+            void (async () => {
+              try {
+                const results = await Promise.all(urls.map(u => fetchLinkPreview(u)));
+                const previews = results.filter((p): p is LinkPreview => p !== null);
+                if (previews.length > 0) {
+                  await queries.storeLinkPreviews(messageId, JSON.stringify(previews));
+                  broadcast(spaceId, channelId, {
+                    type: 'message:link_preview',
+                    linkPreview: { messageId, previews },
+                  });
+                }
+              } catch {
+                // Non-fatal — link preview fetch failures don't affect message delivery
+              }
+            })();
+          }
+        }
 
         // ── Notify other channels in space of new unread message ──────────
         {
