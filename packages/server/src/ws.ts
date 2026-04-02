@@ -343,13 +343,13 @@ export function createWsServer(server: import('http').Server) {
           socket.send(JSON.stringify({ type: 'error', error: 'rate limit exceeded \u2014 slow down' } satisfies ServerMessage));
           return;
         }
-        const content = msg.content?.trim();
-        if (!content) {
+        const content = msg.content?.trim() ?? '';
+        if (!content && !msg.attachmentId) {
           socket.send(JSON.stringify({ type: 'error', error: 'empty message' } satisfies ServerMessage));
           return;
         }
 
-        const { id: messageId } = await queries.insertMessage(socket.spaceId, socket.userId, socket.channelId, content);
+        const { id: messageId } = await queries.insertMessage(socket.spaceId, socket.userId, socket.channelId, content || '');
         const now = Math.floor(Date.now() / 1000);
 
         // Link pending attachment to message if provided

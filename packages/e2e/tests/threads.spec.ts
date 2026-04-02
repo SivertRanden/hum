@@ -19,7 +19,7 @@ test.describe('Thread replies', () => {
 
     // Send a message first
     const msg = 'Open my thread!';
-    await page.locator('.compose input').fill(msg);
+    await page.locator('.compose').getByRole('textbox').fill(msg);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
 
@@ -38,7 +38,7 @@ test.describe('Thread replies', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a parent message
-    await page.locator('.compose input').fill('Parent message');
+    await page.locator('.compose').getByRole('textbox').fill('Parent message');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Parent message' })).toBeVisible({ timeout: 5_000 });
 
@@ -60,7 +60,7 @@ test.describe('Thread replies', () => {
     await createSpace(page, `ReplyCntSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Count test message');
+    await page.locator('.compose').getByRole('textbox').fill('Count test message');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Count test message' })).toBeVisible({ timeout: 5_000 });
 
@@ -85,7 +85,7 @@ test.describe('Thread replies', () => {
     await createSpace(page, `CloseThreadSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Close test');
+    await page.locator('.compose').getByRole('textbox').fill('Close test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Close test' })).toBeVisible({ timeout: 5_000 });
 
@@ -102,7 +102,7 @@ test.describe('Thread replies', () => {
     await createSpace(page, `ReopenSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input').fill('Reopen thread test');
+    await page.locator('.compose').getByRole('textbox').fill('Reopen thread test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Reopen thread test' })).toBeVisible({ timeout: 5_000 });
 
