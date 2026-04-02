@@ -104,6 +104,9 @@ export interface Queries {
   createInviteToken(token: string, space_id: number, created_by: number, expires_at: number | null): Promise<void>;
   getInviteToken(token: string): Promise<InviteToken | undefined>;
   incrementInviteUses(token: string): Promise<void>;
+
+  markChannelRead(user_id: number, space_id: number, channel: string, last_read_message_id: number): Promise<void>;
+  getUnreadCounts(user_id: number, space_id: number): Promise<{ channel: string; count: number }[]>;
 }
 
 // ── SQLite driver ─────────────────────────────────────────────────────────────
@@ -288,6 +291,25 @@ function buildSqliteQueries(): Queries {
         .where(eq(invite_tokens.token, token))
         .run();
     },
+
+    markChannelRead: async (user_id, space_id, channel, last_read_message_id) => {
+      const { last_read } = sqliteSchema;
+      db.insert(last_read).values({ user_id, space_id, channel, last_read_message_id })
+        .onConflictDoUpdate({
+          target: [last_read.user_id, last_read.space_id, last_read.channel],
+          set: { last_read_message_id, updated_at: nowEpoch },
+        }).run();
+    },
+
+    getUnreadCounts: async (user_id, space_id) => {
+      const { last_read } = sqliteSchema;
+      return db.select({ channel: messages.channel, count: sql<number>`count(*)`.as('count') })
+        .from(messages)
+        .leftJoin(last_read, and(eq(last_read.user_id, user_id), eq(last_read.space_id, space_id), eq(last_read.channel, messages.channel)))
+        .where(and(eq(messages.space_id, space_id), isNull(messages.deleted_at), sql`${messages.id} > COALESCE(${last_read.last_read_message_id}, 0)`))
+        .groupBy(messages.channel).all() as { channel: string; count: number }[];
+    },
+
   };
 }
 
@@ -477,6 +499,26 @@ async function buildPgQueries(): Promise<Queries> {
         .set({ uses: sql`${invite_tokens.uses} + 1` })
         .where(eq(invite_tokens.token, token));
     },
+
+    markChannelRead: async (user_id, space_id, channel, last_read_message_id) => {
+      const { last_read } = pgSchema;
+      await db.insert(last_read).values({ user_id, space_id, channel, last_read_message_id })
+        .onConflictDoUpdate({
+          target: [last_read.user_id, last_read.space_id, last_read.channel],
+          set: { last_read_message_id, updated_at: nowEpoch },
+        });
+    },
+
+    getUnreadCounts: async (user_id, space_id) => {
+      const { last_read } = pgSchema;
+      const rows = await db.select({ channel: messages.channel, count: sql<number>`count(*)`.as('count') })
+        .from(messages)
+        .leftJoin(last_read, and(eq(last_read.user_id, user_id), eq(last_read.space_id, space_id), eq(last_read.channel, messages.channel)))
+        .where(and(eq(messages.space_id, space_id), isNull(messages.deleted_at), sql`${messages.id} > COALESCE(${last_read.last_read_message_id}, 0)`))
+        .groupBy(messages.channel);
+      return rows as { channel: string; count: number }[];
+    },
+
   };
 }
 

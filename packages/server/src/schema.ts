@@ -61,3 +61,14 @@ export const invite_tokens = sqliteTable('invite_tokens', {
   max_uses: integer('max_uses'),
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
 });
+
+export const last_read = sqliteTable('last_read', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),
+  channel: text('channel').notNull(),
+  last_read_message_id: integer('last_read_message_id').notNull().default(0),
+  updated_at: integer('updated_at').notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('last_read_user_space_channel_unique').on(table.user_id, table.space_id, table.channel),
+]);

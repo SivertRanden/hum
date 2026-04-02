@@ -15,6 +15,7 @@ interface ChannelSidebarProps {
   activeVoiceRoomId: string | null;
   members: SpaceMember[];
   onCreateInvite: () => Promise<string>;
+  unreadCounts?: Map<string, number>;
 }
 
 function channelClientId(ch: Channel): string {
@@ -83,6 +84,7 @@ export function ChannelSidebar({
   activeVoiceRoomId,
   members,
   onCreateInvite,
+  unreadCounts = new Map(),
 }: ChannelSidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -154,7 +156,10 @@ export function ChannelSidebar({
                     disabled={!server}
                   >
                     <HashIcon />
-                    <span>{ch.name}</span>
+                    <span className="flex-1">{ch.name}</span>
+                    {(unreadCounts.get(ch.name) ?? 0) > 0 && (
+                      <span className="unread-dot" title={`${unreadCounts.get(ch.name)} unread`} />
+                    )}
                   </button>
                   <button
                     className="channel-delete-btn"

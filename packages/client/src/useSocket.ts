@@ -36,6 +36,12 @@ export interface MentionEvent {
   message: HumMessage;
 }
 
+export interface ChannelNewMessageEvent {
+  type: 'channel:new_message';
+  spaceId: number;
+  channelId: string;
+}
+
 type ServerEvent =
   | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
@@ -46,7 +52,8 @@ type ServerEvent =
   | { type: 'typing'; userId: number; username: string; isTyping: boolean }
   | VoiceServerEvent
   | PresenceUpdate
-  | MentionEvent;
+  | MentionEvent
+  | ChannelNewMessageEvent;
 
 interface UseSocketOptions {
   token: string;
@@ -61,9 +68,10 @@ interface UseSocketOptions {
   onTyping?: (userId: number, username: string, isTyping: boolean) => void;
   onPresenceUpdate?: (update: PresenceUpdate) => void;
   onMention?: (event: MentionEvent) => void;
+  onChannelNewMessage?: (event: ChannelNewMessageEvent) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -91,6 +99,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
 
   const onMentionRef = useRef(onMention);
   onMentionRef.current = onMention;
+
+  const onChannelNewMessageRef = useRef(onChannelNewMessage);
+  onChannelNewMessageRef.current = onChannelNewMessage;
 
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -137,6 +148,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       }
       else if (event.type === 'mention') {
         onMentionRef.current?.(event as MentionEvent);
+      }
+      else if (event.type === 'channel:new_message') {
+        onChannelNewMessageRef.current?.(event as ChannelNewMessageEvent);
       }
       else if (event.type.startsWith('voice:')) {
         onVoiceEventRef.current?.(event as VoiceServerEvent);
