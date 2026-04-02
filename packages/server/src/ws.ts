@@ -22,6 +22,8 @@ interface ClientMessage {
   // reaction fields
   messageId?: number;
   emoji?: string;
+  // attachment fields
+  attachmentId?: number;
 }
 
 interface ReactionGroup {
@@ -52,6 +54,7 @@ interface ServerMessage {
     createdAt: number;
     editedAt?: number;
     reactions?: ReactionGroup[];
+    attachments?: { id: number; filename: string; url: string; mimeType: string; size: number }[];
     linkPreviews?: LinkPreview[];
   };
   messages?: ServerMessage['message'][];
@@ -346,6 +349,20 @@ export function createWsServer(server: import('http').Server) {
         const { id: messageId } = await queries.insertMessage(socket.spaceId, socket.userId, socket.channelId, content);
         const now = Math.floor(Date.now() / 1000);
 
+        // Link pending attachment to message if provided
+        let attachments: { id: number; filename: string; url: string; mimeType: string; size: number }[] = [];
+        if (msg.attachmentId) {
+          await queries.linkAttachmentToMessage(msg.attachmentId, messageId);
+          const map = await queries.getAttachmentsForMessages([messageId]);
+          attachments = (map[messageId] ?? []).map(a => ({
+            id: a.id,
+            filename: a.filename,
+            url: `/uploads/${a.storage_key}`,
+            mimeType: a.mime_type,
+            size: a.size,
+          }));
+        }
+
         const outbound: ServerMessage = {
           type: 'message',
           message: {
@@ -356,6 +373,7 @@ export function createWsServer(server: import('http').Server) {
             username: socket.username ?? '',
             content,
             createdAt: now,
+            attachments,
           },
         };
 

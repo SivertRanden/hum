@@ -236,4 +236,17 @@ export const api = {
 
   postThreadReply: (token: string, spaceId: number, messageId: number, content: string) =>
     post<ThreadReplyData>(`/spaces/${spaceId}/messages/${messageId}/thread/replies`, { content }, token),
+
+  uploadFile: async (token: string, file: File): Promise<{ id: number; url: string; filename: string; mimeType: string; size: number }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json() as { id: number; url: string; filename: string; mimeType: string; size: number; error?: string };
+    if (!res.ok) throw new Error(data.error ?? 'Upload failed');
+    return data;
+  },
 };

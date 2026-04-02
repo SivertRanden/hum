@@ -1464,3 +1464,64 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--surface2);
   color: var(--text);
 }
+
+/* ── File attachments ─────────────────────────────────────────────────────── */
+.msg-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.msg-attachment-image {
+  max-width: 300px;
+  max-height: 200px;
+  border-radius: 6px;
+  display: block;
+}
+.msg-attachment-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--surface2);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.msg-attachment-file:hover { background: var(--surface3, var(--border)); }
+
+.pending-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+}
+.pending-attachment-preview {
+  max-height: 60px;
+  max-width: 80px;
+  border-radius: 4px;
+}
+.pending-attachment-name {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.pending-attachment-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted, #aaa);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.pending-attachment-remove:hover { color: var(--text); }
+
+.upload-error {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
