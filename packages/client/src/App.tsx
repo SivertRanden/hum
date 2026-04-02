@@ -660,6 +660,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [editingTopic, setEditingTopic] = useState(false);
+  const [topicInput, setTopicInput] = useState('');
   const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -917,6 +919,27 @@ export default function App() {
     setTypingUsers(new Map());
   }, [activeChannelId, activeSpaceId]);
 
+  // Reset topic editing when channel changes
+  useEffect(() => {
+    setEditingTopic(false);
+  }, [activeChannelId, activeSpaceId]);
+
+  const activeChannel = channels.find(ch => {
+    const clientId = ch.type === 'voice' ? `voice:${ch.name}` : ch.name;
+    return clientId === activeChannelId;
+  }) ?? null;
+
+  const handleUpdateTopic = async (topic: string | null) => {
+    if (!auth || !activeSpaceId || !activeChannel) return;
+    try {
+      const result = await api.updateChannelTopic(auth.token, activeSpaceId, activeChannel.id, topic);
+      setChannels(prev => prev.map(ch => ch.id === activeChannel.id ? { ...ch, topic: result.topic } : ch));
+    } catch (err) {
+      console.error('[topic]', err);
+    }
+    setEditingTopic(false);
+  };
+
   const socketChannelId = isVoiceChannel(activeChannelId) ? null : activeChannelId;
   const activeDm = isDmChannel(activeChannelId)
     ? dms.find(d => `dm:${d.id}` === activeChannelId)
@@ -1087,6 +1110,32 @@ export default function App() {
                 }
               </span>
               <span>{inVoice ? voiceRoomName(activeChannelId) : inDm ? (activeDm?.other_display_name ?? activeDm?.other_username ?? activeChannelId) : activeChannelId}</span>
+              {!inVoice && !inDm && activeChannel && (
+                editingTopic ? (
+                  <form
+                    className="main-header-topic-form"
+                    onSubmit={e => { e.preventDefault(); void handleUpdateTopic(topicInput.trim() || null); }}
+                  >
+                    <input
+                      className="main-header-topic-input"
+                      value={topicInput}
+                      onChange={e => setTopicInput(e.target.value)}
+                      placeholder="Set a topic…"
+                      autoFocus
+                      onBlur={() => void handleUpdateTopic(topicInput.trim() || null)}
+                      onKeyDown={e => { if (e.key === 'Escape') setEditingTopic(false); }}
+                    />
+                  </form>
+                ) : (
+                  <span
+                    className="main-header-topic"
+                    onClick={() => { setTopicInput(activeChannel.topic ?? ''); setEditingTopic(true); }}
+                    title="Click to set topic"
+                  >
+                    {activeChannel.topic ?? 'Set a topic…'}
+                  </span>
+                )
+              )}
               <button
                 className="header-search-btn"
                 onClick={() => setShowSearch(true)}
