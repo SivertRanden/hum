@@ -872,3 +872,76 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--hum-accent, #7c3aed);
   flex-shrink: 0;
 }
+
+/* ── Emoji reactions ─────────────────────────────────────────────────────── */
+
+.msg-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  flex-basis: 100%;
+}
+
+.reaction-pill {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 2px 8px;
+  transition: background var(--hum-transition-fast), border-color var(--hum-transition-fast);
+}
+.reaction-pill:hover { background: var(--surface3, var(--border)); }
+.reaction-pill.mine {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent);
+}
+
+.reaction-add-wrap { position: relative; }
+
+.reaction-add-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 2px 7px;
+  transition: background var(--hum-transition-fast), color var(--hum-transition-fast);
+}
+.reaction-add-btn:hover {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.reaction-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  z-index: 50;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.reaction-quick-btn {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 6px;
+  transition: background var(--hum-transition-fast);
+}
+.reaction-quick-btn:hover { background: var(--border); }

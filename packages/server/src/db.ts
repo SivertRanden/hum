@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
 import { migrate as migrateSqlite } from 'drizzle-orm/better-sqlite3/migrator';
-import { eq, and, isNull, asc, sql } from 'drizzle-orm';
+import { eq, and, isNull, asc, sql, inArray } from 'drizzle-orm';
 import * as sqliteSchema from './schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,8 @@ export interface User {
   id: number;
   username: string;
   password_hash: string;
+  display_name: string | null;
+  avatar_url: string | null;
   created_at: number;
   last_seen_at: number | null;
 }
@@ -59,6 +61,10 @@ export interface SpaceMember {
   role: 'owner' | 'member';
   joined_at: number;
   username?: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  is_online?: boolean;
+  last_seen_at?: number | null;
 }
 
 export interface InviteToken {
@@ -70,6 +76,15 @@ export interface InviteToken {
   uses: number;
   max_uses: number | null;
   created_at: number;
+}
+
+export interface MessageReaction {
+  id: number;
+  message_id: number;
+  user_id: number;
+  emoji: string;
+  created_at: number;
+  username?: string;
 }
 
 // ── Unified async Queries interface ───────────────────────────────────────────
@@ -107,6 +122,12 @@ export interface Queries {
 
   markChannelRead(user_id: number, space_id: number, channel: string, last_read_message_id: number): Promise<void>;
   getUnreadCounts(user_id: number, space_id: number): Promise<{ channel: string; count: number }[]>;
+
+  addReaction(message_id: number, user_id: number, emoji: string): Promise<void>;
+  removeReaction(message_id: number, user_id: number, emoji: string): Promise<void>;
+  getReactionsForMessages(message_ids: number[]): Promise<Record<number, MessageReaction[]>>;
+
+  updateUserProfile(user_id: number, display_name: string | null, avatar_url?: string | null): Promise<void>;
 }
 
 // ── SQLite driver ─────────────────────────────────────────────────────────────
@@ -129,6 +150,8 @@ function buildSqliteQueries(): Queries {
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN updated_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE messages ADD COLUMN deleted_at INTEGER'); } catch { /* already exists */ }
   try { rawDb.exec('ALTER TABLE users ADD COLUMN last_seen_at INTEGER'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE users ADD COLUMN display_name TEXT'); } catch { /* already exists */ }
+  try { rawDb.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT'); } catch { /* already exists */ }
 
   // Data migrations: seed defaults for existing rows
   rawDb.exec(`
@@ -257,13 +280,15 @@ function buildSqliteQueries(): Queries {
         role: space_members.role,
         joined_at: space_members.joined_at,
         username: users.username,
+        display_name: users.display_name,
+        avatar_url: users.avatar_url,
         last_seen_at: users.last_seen_at,
       })
         .from(space_members)
         .innerJoin(users, eq(space_members.user_id, users.id))
         .where(eq(space_members.space_id, space_id))
         .orderBy(asc(space_members.joined_at))
-        .all() as (SpaceMember & { username: string; last_seen_at: number | null })[],
+        .all() as (SpaceMember & { username: string; display_name: string | null; avatar_url: string | null; last_seen_at: number | null })[],
 
     addSpaceMember: async (space_id, user_id, role) => {
       db.insert(space_members).values({ space_id, user_id, role }).onConflictDoNothing().run();
@@ -308,6 +333,47 @@ function buildSqliteQueries(): Queries {
         .leftJoin(last_read, and(eq(last_read.user_id, user_id), eq(last_read.space_id, space_id), eq(last_read.channel, messages.channel)))
         .where(and(eq(messages.space_id, space_id), isNull(messages.deleted_at), sql`${messages.id} > COALESCE(${last_read.last_read_message_id}, 0)`))
         .groupBy(messages.channel).all() as { channel: string; count: number }[];
+    },
+
+    addReaction: async (message_id, user_id, emoji) => {
+      const { message_reactions } = sqliteSchema;
+      db.insert(message_reactions).values({ message_id, user_id, emoji }).onConflictDoNothing().run();
+    },
+
+    removeReaction: async (message_id, user_id, emoji) => {
+      const { message_reactions } = sqliteSchema;
+      db.delete(message_reactions)
+        .where(and(eq(message_reactions.message_id, message_id), eq(message_reactions.user_id, user_id), eq(message_reactions.emoji, emoji)))
+        .run();
+    },
+
+    getReactionsForMessages: async (message_ids) => {
+      if (message_ids.length === 0) return {};
+      const { message_reactions } = sqliteSchema;
+      const rows = db.select({
+        id: message_reactions.id,
+        message_id: message_reactions.message_id,
+        user_id: message_reactions.user_id,
+        emoji: message_reactions.emoji,
+        created_at: message_reactions.created_at,
+        username: users.username,
+      })
+        .from(message_reactions)
+        .innerJoin(users, eq(message_reactions.user_id, users.id))
+        .where(inArray(message_reactions.message_id, message_ids))
+        .all() as (MessageReaction & { username: string })[];
+      const result: Record<number, MessageReaction[]> = {};
+      for (const row of rows) {
+        if (!result[row.message_id]) result[row.message_id] = [];
+        result[row.message_id].push(row);
+      }
+      return result;
+    },
+
+    updateUserProfile: async (user_id, display_name, avatar_url) => {
+      const upd: Partial<{ display_name: string | null; avatar_url: string | null }> = { display_name };
+      if (avatar_url !== undefined) upd.avatar_url = avatar_url;
+      db.update(users).set(upd).where(eq(users.id, user_id)).run();
     },
 
   };
@@ -517,6 +583,45 @@ async function buildPgQueries(): Promise<Queries> {
         .where(and(eq(messages.space_id, space_id), isNull(messages.deleted_at), sql`${messages.id} > COALESCE(${last_read.last_read_message_id}, 0)`))
         .groupBy(messages.channel);
       return rows as { channel: string; count: number }[];
+    },
+
+    addReaction: async (message_id, user_id, emoji) => {
+      const { message_reactions } = pgSchema;
+      await db.insert(message_reactions).values({ message_id, user_id, emoji }).onConflictDoNothing();
+    },
+
+    removeReaction: async (message_id, user_id, emoji) => {
+      const { message_reactions } = pgSchema;
+      await db.delete(message_reactions)
+        .where(and(eq(message_reactions.message_id, message_id), eq(message_reactions.user_id, user_id), eq(message_reactions.emoji, emoji)));
+    },
+
+    updateUserProfile: async (user_id, display_name, avatar_url) => {
+      const upd: Partial<{ display_name: string | null; avatar_url: string | null }> = { display_name };
+      if (avatar_url !== undefined) upd.avatar_url = avatar_url;
+      await db.update(users).set(upd).where(eq(users.id, user_id));
+    },
+
+    getReactionsForMessages: async (message_ids) => {
+      if (message_ids.length === 0) return {};
+      const { message_reactions } = pgSchema;
+      const rows = await db.select({
+        id: message_reactions.id,
+        message_id: message_reactions.message_id,
+        user_id: message_reactions.user_id,
+        emoji: message_reactions.emoji,
+        created_at: message_reactions.created_at,
+        username: users.username,
+      })
+        .from(message_reactions)
+        .innerJoin(users, eq(message_reactions.user_id, users.id))
+        .where(inArray(message_reactions.message_id, message_ids)) as (MessageReaction & { username: string })[];
+      const result: Record<number, MessageReaction[]> = {};
+      for (const row of rows) {
+        if (!result[row.message_id]) result[row.message_id] = [];
+        result[row.message_id].push(row);
+      }
+      return result;
     },
 
   };

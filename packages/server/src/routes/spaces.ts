@@ -200,4 +200,49 @@ router.post('/:id/invites', requireAuth, async (req: AuthRequest, res: Response)
   res.status(201).json({ token, expiresAt });
 });
 
+// ── Message reactions ─────────────────────────────────────────────────────────
+
+router.post('/:id/messages/:messageId/reactions', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+  const { emoji } = req.body as { emoji?: string };
+  if (!emoji?.trim()) { res.status(400).json({ error: 'emoji required' }); return; }
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  await queries.addReaction(messageId, req.user!.userId, emoji.trim());
+
+  broadcast(spaceId, message.channel, {
+    type: 'message:reaction',
+    reaction: { messageId, emoji: emoji.trim(), userId: req.user!.userId, username: req.user!.username, action: 'add' },
+  });
+
+  res.status(204).end();
+});
+
+router.delete('/:id/messages/:messageId/reactions/:emoji', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const messageId = Number(req.params.messageId);
+  const emoji = decodeURIComponent(req.params.emoji);
+
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+
+  const message = await queries.getMessageById(messageId);
+  if (!message || message.space_id !== spaceId) { res.status(404).json({ error: 'message not found' }); return; }
+
+  await queries.removeReaction(messageId, req.user!.userId, emoji);
+
+  broadcast(spaceId, message.channel, {
+    type: 'message:reaction',
+    reaction: { messageId, emoji, userId: req.user!.userId, username: req.user!.username, action: 'remove' },
+  });
+
+  res.status(204).end();
+});
+
 export default router;

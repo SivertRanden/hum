@@ -5,6 +5,8 @@ export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   username: text('username').notNull().unique(),
   password_hash: text('password_hash').notNull(),
+  display_name: text('display_name'),
+  avatar_url: text('avatar_url'),
   created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
   last_seen_at: integer('last_seen_at'),
 });
@@ -71,4 +73,14 @@ export const last_read = sqliteTable('last_read', {
   updated_at: integer('updated_at').notNull().default(sql`(unixepoch())`),
 }, (table) => [
   uniqueIndex('last_read_user_space_channel_unique').on(table.user_id, table.space_id, table.channel),
+]);
+
+export const message_reactions = sqliteTable('message_reactions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  message_id: integer('message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  user_id: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  emoji: text('emoji').notNull(),
+  created_at: integer('created_at').notNull().default(sql`(unixepoch())`),
+}, (table) => [
+  uniqueIndex('message_reactions_unique').on(table.message_id, table.user_id, table.emoji),
 ]);

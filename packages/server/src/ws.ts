@@ -13,7 +13,7 @@ interface HumSocket extends WebSocket {
 // ── Text chat types ───────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'typing_start' | 'typing_stop';
+  type: 'join' | 'message' | 'voice:join' | 'voice:leave' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'typing_start' | 'typing_stop' | 'reaction:toggle';
   spaceId?: number;
   channelId?: string;
   content?: string;
@@ -22,12 +22,21 @@ interface ClientMessage {
   targetUserId?: number;
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
+  // reaction fields
+  messageId?: number;
+  emoji?: string;
+}
+
+interface ReactionGroup {
+  emoji: string;
+  userIds: number[];
+  usernames: string[];
 }
 
 interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:offer' | 'voice:answer' | 'voice:ice' | 'voice:peer_left'
-      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message';
+      | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction';
   spaceId?: number;
   channelId?: string;
   // typing indicator fields
@@ -42,6 +51,7 @@ interface ServerMessage {
     content: string;
     createdAt: number;
     editedAt?: number;
+    reactions?: ReactionGroup[];
   };
   messages?: ServerMessage['message'][];
   messageId?: number;
@@ -55,6 +65,8 @@ interface ServerMessage {
   // presence fields
   isOnline?: boolean;
   lastSeenAt?: number;
+  // reaction fields
+  reaction?: { messageId: number; emoji: string; userId: number; username: string; action: 'add' | 'remove' };
 }
 
 // ── Room key ─────────────────────────────────────────────────────────────────
@@ -268,16 +280,35 @@ export function createWsServer(server: import('http').Server) {
           }, socket);
         }
 
-        const history = (await queries.getMessages(spaceId, channelId, 100)).map((m) => ({
-          id: m.id,
-          spaceId: m.space_id,
-          channelId: m.channel,
-          userId: m.user_id,
-          username: m.username ?? '',
-          content: m.content,
-          createdAt: m.created_at,
-          editedAt: m.updated_at ?? undefined,
-        }));
+        const rawHistory = await queries.getMessages(spaceId, channelId, 100);
+        const messageIds = rawHistory.map(m => m.id);
+        const reactionsMap = await queries.getReactionsForMessages(messageIds);
+
+        const history = rawHistory.map((m) => {
+          const msgReactions = reactionsMap[m.id] ?? [];
+          // Group reactions by emoji
+          const grouped: ReactionGroup[] = [];
+          for (const r of msgReactions) {
+            const existing = grouped.find(g => g.emoji === r.emoji);
+            if (existing) {
+              existing.userIds.push(r.user_id);
+              existing.usernames.push(r.username ?? '');
+            } else {
+              grouped.push({ emoji: r.emoji, userIds: [r.user_id], usernames: [r.username ?? ''] });
+            }
+          }
+          return {
+            id: m.id,
+            spaceId: m.space_id,
+            channelId: m.channel,
+            userId: m.user_id,
+            username: m.username ?? '',
+            content: m.content,
+            createdAt: m.created_at,
+            editedAt: m.updated_at ?? undefined,
+            reactions: grouped.length > 0 ? grouped : undefined,
+          };
+        });
 
         socket.send(JSON.stringify({ type: 'history', messages: history } satisfies ServerMessage));
         socket.send(JSON.stringify({ type: 'joined', spaceId, channelId } satisfies ServerMessage));
@@ -458,6 +489,44 @@ export function createWsServer(server: import('http').Server) {
         } else {
           broadcastTyping(socket.spaceId, socket.channelId, socket, false);
           clearTypingTimer(key, socket.userId);
+        }
+        return;
+      }
+
+      // ── reaction:toggle ───────────────────────────────────────────────────
+      if (msg.type === 'reaction:toggle') {
+        if (!socket.userId || socket.spaceId === undefined || socket.channelId === undefined) {
+          socket.send(JSON.stringify({ type: 'error', error: 'join a space first' } satisfies ServerMessage));
+          return;
+        }
+        const messageId = Number(msg.messageId);
+        const emoji = msg.emoji?.trim();
+        if (!messageId || !emoji) {
+          socket.send(JSON.stringify({ type: 'error', error: 'messageId and emoji required' } satisfies ServerMessage));
+          return;
+        }
+        const message = await queries.getMessageById(messageId);
+        if (!message || message.space_id !== socket.spaceId) {
+          socket.send(JSON.stringify({ type: 'error', error: 'message not found' } satisfies ServerMessage));
+          return;
+        }
+        // Check if user has already reacted with this emoji
+        const existing = await queries.getReactionsForMessages([messageId]);
+        const msgReactions = existing[messageId] ?? [];
+        const alreadyReacted = msgReactions.some(r => r.user_id === socket.userId && r.emoji === emoji);
+
+        if (alreadyReacted) {
+          await queries.removeReaction(messageId, socket.userId, emoji);
+          broadcast(socket.spaceId, socket.channelId, {
+            type: 'message:reaction',
+            reaction: { messageId, emoji, userId: socket.userId, username: socket.username ?? '', action: 'remove' },
+          });
+        } else {
+          await queries.addReaction(messageId, socket.userId, emoji);
+          broadcast(socket.spaceId, socket.channelId, {
+            type: 'message:reaction',
+            reaction: { messageId, emoji, userId: socket.userId, username: socket.username ?? '', action: 'add' },
+          });
         }
         return;
       }
