@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 test.describe('Message Reactions', () => {
   test('adds a reaction to a message', async ({ page }) => {
@@ -53,22 +53,10 @@ test.describe('Message Reactions', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Get invite link
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    // User B joins
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
+    // User B joins via invite
     const usernameB = uniqueUser('rxnB');
-    await pageB.goto('/');
-    await pageB.getByRole('button', { name: /no account\? register/i }).click();
-    await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await pageB.getByRole('button', { name: /create account/i }).click();
-    await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    await pageB.goto(inviteToken);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message

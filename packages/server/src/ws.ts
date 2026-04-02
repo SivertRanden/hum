@@ -228,6 +228,13 @@ export function createWsServer(server: import('http').Server) {
     // Track which voice rooms this socket has joined (for cleanup on disconnect)
     const activeVoiceRooms = new Set<string>(); // "<spaceId>:<channelId>"
 
+    // Prevent uncaught exceptions from EPIPE/ECONNRESET when a browser navigates away
+    socket.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') {
+        console.error('[ws] socket error:', err);
+      }
+    });
+
     socket.on('message', async (raw) => {
       try {
       let msg: ClientMessage;
