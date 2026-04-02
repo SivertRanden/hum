@@ -311,6 +311,7 @@ export default function App() {
   const typingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(new Map());
+  const [mobileView, setMobileView] = useState<'servers' | 'channels' | 'chat'>('servers');
   const activeSpaceIdRef = useRef(activeSpaceId);
   const activeChannelIdRef = useRef(activeChannelId);
   activeSpaceIdRef.current = activeSpaceId;
@@ -376,6 +377,7 @@ export default function App() {
     setActiveSpaceId(id);
     setActiveChannelId(DEFAULT_CHANNEL);
     setMessages([]);
+    setMobileView('channels');
   };
 
   const handleCreateChannel = async (name: string, type: 'text' | 'voice') => {
@@ -417,6 +419,7 @@ export default function App() {
         return next;
       });
     }
+    setMobileView('chat');
   };
 
   const onMessage = useCallback((msg: HumMessage) => {
@@ -599,7 +602,7 @@ export default function App() {
   const inVoice = isVoiceChannel(activeChannelId);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-mobile-view={mobileView}>
       {/* Column 1: server rail */}
       <ServerRail
         servers={spaces}
@@ -624,6 +627,7 @@ export default function App() {
         members={members}
         onCreateInvite={handleCreateInvite}
         unreadCounts={unreadCounts}
+        onMobileBack={() => setMobileView('servers')}
       />
 
       {/* Column 3: main content */}
@@ -631,6 +635,9 @@ export default function App() {
         {activeSpace ? (
           <>
             <header className="main-header">
+              <button className="mobile-back-btn" onClick={() => setMobileView('channels')} aria-label="Back to channels">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+              </button>
               <span className="main-header-icon" aria-hidden>
                 {inVoice
                   ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
