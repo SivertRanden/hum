@@ -872,3 +872,97 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: var(--hum-accent, #7c3aed);
   flex-shrink: 0;
 }
+
+/* ── Mobile back button (hidden on desktop) ─────────────────────────────── */
+
+.mobile-back-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-dim, #aaa);
+  cursor: pointer;
+  padding: 4px;
+  margin-right: 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.mobile-back-btn:hover {
+  color: var(--text, #fff);
+  background: var(--surface2, rgba(255,255,255,0.08));
+}
+
+/* ── Tablet breakpoint ──────────────────────────────────────────────────── */
+
+@media (max-width: 900px) and (min-width: 641px) {
+  .app-shell {
+    grid-template-columns: 56px 180px 1fr;
+  }
+}
+
+/* ── Mobile breakpoint — sliding panel layout ───────────────────────────── */
+
+@media (max-width: 640px) {
+  .app-shell {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    height: 100dvh;
+  }
+
+  .server-rail,
+  .channel-sidebar,
+  .main {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.25s ease;
+    will-change: transform;
+  }
+
+  /* servers view: show rail, hide others */
+  .app-shell[data-mobile-view="servers"] .server-rail  { transform: translateX(0); }
+  .app-shell[data-mobile-view="servers"] .channel-sidebar { transform: translateX(100%); }
+  .app-shell[data-mobile-view="servers"] .main         { transform: translateX(100%); }
+
+  /* channels view: hide rail, show sidebar, hide chat */
+  .app-shell[data-mobile-view="channels"] .server-rail  { transform: translateX(-100%); }
+  .app-shell[data-mobile-view="channels"] .channel-sidebar { transform: translateX(0); }
+  .app-shell[data-mobile-view="channels"] .main         { transform: translateX(100%); }
+
+  /* chat view: hide both sidebars, show main */
+  .app-shell[data-mobile-view="chat"] .server-rail  { transform: translateX(-100%); }
+  .app-shell[data-mobile-view="chat"] .channel-sidebar { transform: translateX(-100%); }
+  .app-shell[data-mobile-view="chat"] .main         { transform: translateX(0); }
+
+  /* Show back buttons on mobile */
+  .mobile-back-btn {
+    display: flex;
+  }
+
+  /* Larger tap targets for channel items */
+  .channel-item {
+    min-height: 44px;
+  }
+
+  /* Server rail full-screen on mobile */
+  .server-rail {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    padding: 12px;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .server-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    font-size: 1.2rem;
+  }
+}
