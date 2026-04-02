@@ -8,7 +8,7 @@ test.describe('Message Reactions', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a message to react to
-    await page.locator('.compose input[type="text"]').fill('React to me!');
+    await page.locator('.compose input:not([type="file"])').fill('React to me!');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'React to me!' })).toBeVisible({ timeout: 5_000 });
 
@@ -29,7 +29,7 @@ test.describe('Message Reactions', () => {
     await createSpace(page, `RmRxnSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input[type="text"]').fill('Remove my reaction!');
+    await page.locator('.compose input:not([type="file"])').fill('Remove my reaction!');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Remove my reaction!' })).toBeVisible({ timeout: 5_000 });
 
@@ -72,7 +72,7 @@ test.describe('Message Reactions', () => {
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message
-    await pageA.locator('.compose input[type="text"]').fill('Count my reactions!');
+    await pageA.locator('.compose input:not([type="file"])').fill('Count my reactions!');
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageA.locator('.msg-content', { hasText: 'Count my reactions!' })).toBeVisible({ timeout: 5_000 });
 
@@ -99,7 +99,7 @@ test.describe('Message Reactions', () => {
     await createSpace(page, `RxnPickerSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input[type="text"]').fill('Emoji picker test');
+    await page.locator('.compose input:not([type="file"])').fill('Emoji picker test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Emoji picker test' })).toBeVisible({ timeout: 5_000 });
 

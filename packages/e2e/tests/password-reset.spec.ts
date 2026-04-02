@@ -75,7 +75,7 @@ test.describe('Password reset flow', () => {
 
     // Set new password
     const newPassword = 'newpass456';
-    await page.getByPlaceholder('new password').fill(newPassword);
+    await page.getByPlaceholder('new password', { exact: true }).fill(newPassword);
     await page.getByPlaceholder('confirm new password').fill(newPassword);
     await page.getByRole('button', { name: /update password/i }).click();
     await expect(page.locator('.auth-screen')).toContainText('Password updated!', { timeout: 5_000 });
@@ -115,7 +115,7 @@ test.describe('Password reset flow', () => {
 
     await page.goto(`/?reset_token=${token}`);
     await expect(page.locator('.auth-screen')).toContainText('choose a new password', { timeout: 5_000 });
-    await page.getByPlaceholder('new password').fill('password1');
+    await page.getByPlaceholder('new password', { exact: true }).fill('password1');
     await page.getByPlaceholder('confirm new password').fill('password2');
     await page.getByRole('button', { name: /update password/i }).click();
     await expect(page.locator('.error')).toContainText(/do not match/i, { timeout: 5_000 });
@@ -124,7 +124,7 @@ test.describe('Password reset flow', () => {
   test('invalid reset token shows error', async ({ page }) => {
     await page.goto('/?reset_token=invalid_token_xyz_123');
     await expect(page.locator('.auth-screen')).toContainText('choose a new password', { timeout: 5_000 });
-    await page.getByPlaceholder('new password').fill('somepass');
+    await page.getByPlaceholder('new password', { exact: true }).fill('somepass');
     await page.getByPlaceholder('confirm new password').fill('somepass');
     await page.getByRole('button', { name: /update password/i }).click();
     await expect(page.locator('.error')).toBeVisible({ timeout: 5_000 });

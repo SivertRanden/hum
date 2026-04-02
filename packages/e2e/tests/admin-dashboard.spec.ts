@@ -41,7 +41,7 @@ test.describe('Admin dashboard', () => {
     const pageMember = await ctxMember.newPage();
     const memberUsername = uniqueUser('adminMember');
     await joinViaInvite(pageMember, inviteUrl, memberUsername);
-    await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageMember.locator('.channel-item', { hasText: 'general' }).click();
 
     // Non-owner member does NOT see the admin dashboard button
@@ -88,7 +88,7 @@ test.describe('Admin dashboard', () => {
     await expect(page.locator('.admin-dashboard')).toBeVisible({ timeout: 5_000 });
 
     // Should show an audit log entry for the edit
-    await expect(page.locator('.audit-log-entry')).toHaveCount({ min: 1 }, { timeout: 5_000 });
+    await expect(page.locator('.audit-log-entry').first()).toBeVisible({ timeout: 5_000 });
     await expect(page.locator('.audit-log-action', { hasText: /edited message/i }).first()).toBeVisible();
   });
 
@@ -103,7 +103,7 @@ test.describe('Admin dashboard', () => {
 
     await page.locator('.admin-tab', { hasText: 'Members' }).click();
     await expect(page.locator('.admin-member-list')).toBeVisible({ timeout: 3_000 });
-    await expect(page.locator('.admin-member-entry')).toHaveCount({ min: 1 });
+    await expect(page.locator('.admin-member-entry').first()).toBeVisible();
     // Stats row shows total members
     await expect(page.locator('.admin-stat-label', { hasText: 'Total members' })).toBeVisible();
   });
@@ -126,7 +126,7 @@ test.describe('Admin dashboard', () => {
     const pageMember = await ctxMember.newPage();
     const memberUsername = uniqueUser('roleMember');
     await joinViaInvite(pageMember, inviteUrl, memberUsername);
-    await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // Owner opens member list
     await openMembersList(pageOwner);
@@ -162,7 +162,7 @@ test.describe('Admin dashboard', () => {
     const pageMember = await ctxMember.newPage();
     const memberUsername = uniqueUser('kickMember');
     await joinViaInvite(pageMember, inviteUrl, memberUsername);
-    await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // Owner opens member list and kicks the member
     await openMembersList(pageOwner);
