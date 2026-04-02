@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api, Space, Channel, SpaceMember, DmChannel } from './api.js';
+import { api, Space, Channel, SpaceMember, DmChannel, SearchResult } from './api.js';
 import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 
@@ -527,6 +527,105 @@ function VoiceRoomView({
   );
 }
 
+// ── Search panel ─────────────────────────────────────────────────────────────
+function highlightContent(content: string, query: string): React.ReactNode {
+  const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+  if (terms.length === 0) return content;
+  const pattern = new RegExp(`(${terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+  const parts = content.split(pattern);
+  return parts.map((part, i) =>
+    pattern.test(part) ? <mark key={i} className="search-highlight">{part}</mark> : part
+  );
+}
+
+interface SearchPanelProps {
+  spaceId: number;
+  token: string;
+  onClose: () => void;
+  onJumpTo: (channelId: string) => void;
+}
+
+function SearchPanel({ spaceId, token, onClose, onJumpTo }: SearchPanelProps) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const runSearch = useCallback(async (q: string) => {
+    if (!q.trim()) { setResults([]); return; }
+    setLoading(true);
+    try {
+      const res = await api.searchMessages(token, spaceId, q);
+      setResults(res);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, spaceId]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setQuery(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => void runSearch(q), 300);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  };
+
+  return (
+    <div className="search-overlay" role="dialog" aria-label="Search messages">
+      <div className="search-panel">
+        <div className="search-input-row">
+          <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          <input
+            ref={inputRef}
+            className="search-input"
+            value={query}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Search messages…"
+          />
+          <button className="search-close-btn" onClick={onClose} aria-label="Close search">✕</button>
+        </div>
+        <div className="search-results">
+          {loading && <div className="search-status">Searching…</div>}
+          {!loading && query.trim() && results.length === 0 && (
+            <div className="search-status">No results for "{query}"</div>
+          )}
+          {results.map(r => (
+            <button
+              key={r.id}
+              className="search-result-item"
+              onClick={() => { onJumpTo(r.channel); onClose(); }}
+            >
+              <span className="search-result-meta">
+                <span className="search-result-channel">#{r.channel}</span>
+                <span className="search-result-username">{r.username}</span>
+                <span className="search-result-time">
+                  {new Date(r.created_at * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                </span>
+              </span>
+              <span className="search-result-content">
+                {highlightContent(r.content, query)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main app ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [auth, setAuth] = useState<AuthState | null>(() => {
@@ -546,6 +645,7 @@ export default function App() {
   const [members, setMembers] = useState<SpaceMember[]>([]);
   const [input, setInput] = useState('');
   const [showCreateSpace, setShowCreateSpace] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
   const [joinError, setJoinError] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
@@ -968,7 +1068,25 @@ export default function App() {
                 }
               </span>
               <span>{inVoice ? voiceRoomName(activeChannelId) : inDm ? (activeDm?.other_display_name ?? activeDm?.other_username ?? activeChannelId) : activeChannelId}</span>
+              <button
+                className="header-search-btn"
+                onClick={() => setShowSearch(true)}
+                aria-label="Search messages"
+                title="Search (⌘K)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+              </button>
             </header>
+            {showSearch && (
+              <SearchPanel
+                spaceId={activeSpaceId!}
+                token={auth.token}
+                onClose={() => setShowSearch(false)}
+                onJumpTo={handleSelectChannel}
+              />
+            )}
 
             {inVoice ? (
               <VoiceRoomView

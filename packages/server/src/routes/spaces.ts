@@ -155,6 +155,21 @@ router.delete('/:id/messages/:messageId', requireAuth, async (req: AuthRequest, 
   res.status(204).end();
 });
 
+// ── Full-text search ─────────────────────────────────────────────────────────
+
+router.get('/:id/search', requireAuth, async (req: AuthRequest, res: Response) => {
+  const spaceId = Number(req.params.id);
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const channel = typeof req.query.channel === 'string' ? req.query.channel : null;
+  const limit = Math.min(Number(req.query.limit) || 25, 100);
+
+  if (!q) { res.json([]); return; }
+  const space = await queries.getSpaceById(spaceId);
+  if (!space) { res.status(404).json({ error: 'space not found' }); return; }
+  const results = await queries.searchMessages(spaceId, q, channel, limit);
+  res.json(results);
+});
+
 // ── Members ──────────────────────────────────────────────────────────────────
 
 router.get('/:id/members', requireAuth, async (req: AuthRequest, res: Response) => {

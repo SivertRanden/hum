@@ -162,6 +162,18 @@ export interface Queries {
   findDmChannel(space_id: number, user1_id: number, user2_id: number): Promise<{ id: number } | undefined>;
   listDmChannels(space_id: number, user_id: number): Promise<DmChannel[]>;
   isUserDmMember(channel_id: number, user_id: number): Promise<boolean>;
+
+  searchMessages(space_id: number, query: string, channel: string | null, limit: number): Promise<SearchResult[]>;
+}
+
+export interface SearchResult {
+  id: number;
+  space_id: number;
+  channel: string;
+  user_id: number;
+  username: string;
+  content: string;
+  created_at: number;
 }
 
 // ── SQLite driver ─────────────────────────────────────────────────────────────
@@ -198,6 +210,20 @@ function buildSqliteQueries(): Queries {
     INSERT OR IGNORE INTO space_members (space_id, user_id, role)
     SELECT id, created_by, 'owner' FROM spaces;
   `);
+
+  // FTS5 full-text search (idempotent setup)
+  rawDb.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, content='messages', content_rowid='id')`);
+  try { rawDb.exec(`INSERT INTO messages_fts(messages_fts) VALUES('rebuild')`); } catch { /* ok */ }
+  rawDb.exec(`CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+  END`);
+  rawDb.exec(`CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+  END`);
+  rawDb.exec(`CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+  END`);
 
   const nowEpoch = sql`(unixepoch())`;
 
@@ -492,6 +518,31 @@ function buildSqliteQueries(): Queries {
         .where(and(eq(dm_members.channel_id, channel_id), eq(dm_members.user_id, user_id)))
         .get();
       return !!row;
+    },
+
+    searchMessages: async (space_id, query, channel, limit) => {
+      const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+      if (terms.length === 0) return [];
+      const ftsQuery = terms.map(t => `"${t.replace(/"/g, ' ')}"`).join(' ');
+      try {
+        const sql_str = channel
+          ? `SELECT m.id, m.space_id, m.channel, m.user_id, m.content, m.created_at, u.username
+             FROM messages_fts
+             JOIN messages m ON m.id = messages_fts.rowid
+             JOIN users u ON u.id = m.user_id
+             WHERE messages_fts MATCH ?
+               AND m.space_id = ? AND m.channel = ? AND m.deleted_at IS NULL
+             ORDER BY rank LIMIT ?`
+          : `SELECT m.id, m.space_id, m.channel, m.user_id, m.content, m.created_at, u.username
+             FROM messages_fts
+             JOIN messages m ON m.id = messages_fts.rowid
+             JOIN users u ON u.id = m.user_id
+             WHERE messages_fts MATCH ?
+               AND m.space_id = ? AND m.deleted_at IS NULL
+             ORDER BY rank LIMIT ?`;
+        const args = channel ? [ftsQuery, space_id, channel, limit] : [ftsQuery, space_id, limit];
+        return rawDb.prepare(sql_str).all(...args) as SearchResult[];
+      } catch { return []; }
     },
 
   };
@@ -829,6 +880,23 @@ async function buildPgQueries(): Promise<Queries> {
         .where(and(eq(dm_members.channel_id, channel_id), eq(dm_members.user_id, user_id)))
         .limit(1);
       return rows.length > 0;
+    },
+
+    searchMessages: async (space_id, query, channel, limit) => {
+      const q = query.trim();
+      if (!q) return [];
+      const rows = await appClient<SearchResult[]>`
+        SELECT m.id, m.space_id, m.channel, m.user_id, m.content, m.created_at, u.username
+        FROM messages m
+        JOIN users u ON u.id = m.user_id
+        WHERE m.space_id = ${space_id}
+          AND m.deleted_at IS NULL
+          AND (${channel}::text IS NULL OR m.channel = ${channel})
+          AND to_tsvector('english', m.content) @@ plainto_tsquery('english', ${q})
+        ORDER BY ts_rank(to_tsvector('english', m.content), plainto_tsquery('english', ${q})) DESC
+        LIMIT ${limit}
+      `;
+      return rows;
     },
 
   };
