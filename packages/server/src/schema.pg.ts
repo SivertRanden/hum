@@ -153,6 +153,8 @@ export const thread_replies = pgTable('thread_replies', {
   deleted_at: integer('deleted_at'),
 }, (table) => [
   index('idx_thread_replies_parent').on(table.parent_message_id, table.created_at),
+]);
+
 export const space_emoji = pgTable('space_emoji', {
   id: serial('id').primaryKey(),
   space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),

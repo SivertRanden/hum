@@ -154,6 +154,8 @@ export interface PendingNotification {
   space_id: number;
   space_name: string;
   channel: string;
+}
+
 export interface SpaceEmoji {
   id: number;
   space_id: number;
@@ -837,6 +839,8 @@ function buildSqliteQueries(): Queries {
       const parent = db.select({ reply_count: messages.reply_count })
         .from(messages).where(eq(messages.id, parent_message_id)).get() as { reply_count: number } | undefined;
       return { id: row.id, reply_count: parent?.reply_count ?? 0 };
+    },
+
     addSpaceEmoji: async (space_id, name, image_url, created_by) => {
       const { space_emoji } = sqliteSchema;
       const row = db.insert(space_emoji).values({ space_id, name, image_url, created_by }).returning().get()!;
@@ -1372,6 +1376,8 @@ async function buildPgQueries(): Promise<Queries> {
       const parentRows = await db.select({ reply_count: messages.reply_count })
         .from(messages).where(eq(messages.id, parent_message_id)).limit(1);
       return { id: rows[0].id, reply_count: parentRows[0]?.reply_count ?? 0 };
+    },
+
     addSpaceEmoji: async (space_id, name, image_url, created_by) => {
       const { space_emoji } = pgSchema;
       const rows = await db.insert(space_emoji).values({ space_id, name, image_url, created_by }).returning();

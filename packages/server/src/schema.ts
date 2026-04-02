@@ -153,6 +153,8 @@ export const thread_replies = sqliteTable('thread_replies', {
   deleted_at: integer('deleted_at'),
 }, (table) => [
   index('idx_thread_replies_parent').on(table.parent_message_id, table.created_at),
+]);
+
 export const space_emoji = sqliteTable('space_emoji', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   space_id: integer('space_id').notNull().references(() => spaces.id, { onDelete: 'cascade' }),
