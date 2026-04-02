@@ -11,23 +11,6 @@ import { uniqueUser, register, createSpace } from './helpers';
  * Multi-user tests follow the two-context pattern from typing.spec.ts.
  */
 
-async function joinViaInvite(
-  pageHost: import('@playwright/test').Page,
-  pageGuest: import('@playwright/test').Page,
-  guestUsername: string,
-) {
-  await pageHost.locator('.channel-add-btn[title="Copy invite link"]').click();
-  const inviteUrl = await pageHost.evaluate(() => navigator.clipboard.readText());
-
-  await pageGuest.goto('/');
-  await pageGuest.getByRole('button', { name: /no account\? register/i }).click();
-  await pageGuest.getByPlaceholder('username').fill(guestUsername);
-  await pageGuest.getByPlaceholder('password', { exact: true }).fill('testpass123');
-  await pageGuest.getByRole('button', { name: /create account/i }).click();
-  await expect(pageGuest.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-  await pageGuest.goto(inviteUrl);
-}
-
 test.describe('@mentions', () => {
   test('typing @username renders a mention span in the message', async ({ page }) => {
     const username = uniqueUser('mntn');
@@ -61,7 +44,7 @@ test.describe('@mentions', () => {
   });
 
   test('mentioned user sees mention-me highlight when viewing the message', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('sndA');
     await register(pageA, usernameA);
@@ -70,10 +53,30 @@ test.describe('@mentions', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
+    // Intercept clipboard write to capture invite URL
+    await pageA.evaluate(() => {
+      (window as any).__clipboardText = '';
+      const orig = navigator.clipboard.writeText.bind(navigator.clipboard);
+      navigator.clipboard.writeText = async (text: string) => {
+        (window as any).__clipboardText = text;
+        try { await orig(text); } catch { /* ok */ }
+      };
+    });
+    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
+    // Button title changes to "Copied!" after the async invite creation + clipboard write
+    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 5_000 });
+    const inviteUrl = await pageA.evaluate(() => (window as any).__clipboardText as string);
+
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('rcvB');
-    await joinViaInvite(pageA, pageB, usernameB);
+    await pageB.goto('/');
+    await pageB.getByRole('button', { name: /no account\? register/i }).click();
+    await pageB.getByPlaceholder('username').fill(usernameB);
+    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
+    await pageB.getByRole('button', { name: /create account/i }).click();
+    await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
+    await pageB.goto(inviteUrl);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 8_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
