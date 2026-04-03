@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 // ── Channel Topics ────────────────────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ test.describe('Channel topics', () => {
   });
 
   test('topic does not appear for DM conversations', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('topicDmA');
     await register(pageA, usernameA);
@@ -101,19 +101,8 @@ test.describe('Channel topics', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('topicDmB');
-    await pageB.goto('/');
-    await pageB.getByRole('button', { name: /no account\? register/i }).click();
-    await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await pageB.getByRole('button', { name: /create account/i }).click();
-    await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    await pageB.goto(inviteToken);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
 
     // User A opens a DM with User B
@@ -208,7 +197,7 @@ test.describe('User profiles', () => {
   });
 
   test("another user's profile card does not show the edit button", async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('profOtherA');
     await register(pageA, usernameA);
@@ -216,22 +205,8 @@ test.describe('User profiles', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    // Wait for clipboard write to complete before reading
-    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
-    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('profOtherB');
-    await pageB.goto('/');
-    await pageB.getByRole('button', { name: /no account\? register/i }).click();
-    await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await pageB.getByRole('button', { name: /create account/i }).click();
-    await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    await pageB.goto(inviteUrl);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message

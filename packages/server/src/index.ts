@@ -11,6 +11,7 @@ import { sendDigestEmail } from './email.js';
 import authRouter from './routes/auth.js';
 import spacesRouter from './routes/spaces.js';
 import invitesRouter from './routes/invites.js';
+import usersRouter from './routes/users.js';
 import { createWsServer } from './ws.js';
 import { requireAuth, AuthRequest } from './middleware.js';
 
@@ -123,13 +124,7 @@ app.post('/api/upload', apiLimiter, requireAuth, (req: AuthRequest, res) => {
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/spaces', apiLimiter, spacesRouter);
 app.use('/api/invite', apiLimiter, invitesRouter);
-
-// Global error handler — must be defined after all routes
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[hum] unhandled error:', err);
-  if (res.headersSent) return;
-  res.status(500).json({ error: 'Internal server error' });
-});
+app.use('/api/users', apiLimiter, usersRouter);
 
 const server = createServer(app);
 createWsServer(server);

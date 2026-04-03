@@ -225,15 +225,19 @@ export const api = {
     get<UserProfile>(`/users/${userId}`, token),
 
   updateUserProfile: (token: string, userId: number, displayName: string | null) =>
-    patch<UserProfile>(`/users/${userId}/profile`, { displayName }, token),
+    patch<UserProfile>(`/users/${userId}`, { displayName }, token),
 
   uploadAvatar: async (token: string, userId: number, file: File): Promise<{ avatarUrl: string }> => {
-    const form = new FormData();
-    form.append('avatar', file);
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
     const res = await fetch(`${BASE}/users/${userId}/avatar`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl }),
     });
     const data = await res.json() as { avatarUrl: string; error?: string };
     if (!res.ok) throw new Error(data.error ?? 'Upload failed');
