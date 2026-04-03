@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 /**
  * Unread indicator tests.
@@ -11,30 +11,9 @@ import { uniqueUser, register, createSpace } from './helpers';
  * Multi-user tests follow the two-context pattern from typing.spec.ts.
  */
 
-async function joinViaInvite(
-  pageHost: import('@playwright/test').Page,
-  pageGuest: import('@playwright/test').Page,
-  guestUsername: string,
-) {
-  // Host copies the invite link
-  await pageHost.locator('.channel-add-btn[title="Copy invite link"]').click();
-  const inviteUrl = await pageHost.evaluate(() => navigator.clipboard.readText());
-
-  // Guest registers and joins
-  await pageGuest.goto('/');
-  await pageGuest.getByRole('button', { name: /no account\? register/i }).click();
-  await pageGuest.getByPlaceholder('username').fill(guestUsername);
-  await pageGuest.getByPlaceholder('password', { exact: true }).fill('testpass123');
-  await pageGuest.getByRole('button', { name: /create account/i }).click();
-  await expect(pageGuest.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-  await pageGuest.goto(inviteUrl);
-  // Wait for the invite to be processed and the app to settle
-  await expect(pageGuest.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-}
-
 test.describe('Unread indicators', () => {
   test('unread dot appears when a message arrives in another channel', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('unrdA');
     await register(pageA, usernameA);
@@ -49,10 +28,8 @@ test.describe('Unread indicators', () => {
     await expect(pageA.locator('.channel-item', { hasText: 'other' })).toBeVisible({ timeout: 5_000 });
 
     // User B joins via invite
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('unrdB');
-    await joinViaInvite(pageA, pageB, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     const spaceNameLocator = pageB.locator('.channel-server-name', { hasText: spaceName });
     await expect(spaceNameLocator).toBeVisible({ timeout: 10_000 });
 
@@ -76,7 +53,7 @@ test.describe('Unread indicators', () => {
   });
 
   test('unread dot count increments with each message', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('cntA');
     await register(pageA, usernameA);
@@ -89,10 +66,8 @@ test.describe('Unread indicators', () => {
     await pageA.locator('button.channel-create-submit').click();
     await expect(pageA.locator('.channel-item', { hasText: 'other' })).toBeVisible({ timeout: 5_000 });
 
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('cntB');
-    await joinViaInvite(pageA, pageB, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
@@ -116,7 +91,7 @@ test.describe('Unread indicators', () => {
   });
 
   test('reading a channel clears the unread dot', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('clrA');
     await register(pageA, usernameA);
@@ -129,10 +104,8 @@ test.describe('Unread indicators', () => {
     await pageA.locator('button.channel-create-submit').click();
     await expect(pageA.locator('.channel-item', { hasText: 'other' })).toBeVisible({ timeout: 5_000 });
 
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('clrB');
-    await joinViaInvite(pageA, pageB, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     await pageA.locator('.channel-item', { hasText: 'other' }).click();
@@ -153,7 +126,7 @@ test.describe('Unread indicators', () => {
   });
 
   test('unread state persists across page reload', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('relA');
     await register(pageA, usernameA);
@@ -166,10 +139,8 @@ test.describe('Unread indicators', () => {
     await pageA.locator('button.channel-create-submit').click();
     await expect(pageA.locator('.channel-item', { hasText: 'other' })).toBeVisible({ timeout: 5_000 });
 
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('relB');
-    await joinViaInvite(pageA, pageB, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // User A stays in general; user B sends a message in "other" so the

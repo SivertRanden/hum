@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 /** Open user settings dialog via the gear button. */
 async function openSettings(page: import('@playwright/test').Page) {
@@ -116,7 +116,7 @@ test.describe('User profile: display name', () => {
   });
 
   test('display name change is visible to other users', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('dispNameA');
     await register(pageA, usernameA);
@@ -124,18 +124,8 @@ test.describe('User profile: display name', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('dispNameB');
-    await pageB.goto(inviteUrl);
-    await pageB.getByRole('button', { name: /no account\? register/i }).click();
-    await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await pageB.getByRole('button', { name: /create account/i }).click();
-    await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
     // User A sends a message

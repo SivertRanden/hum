@@ -1,22 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
-
-/** Join a space via an invite URL copied from the clipboard. */
-async function joinViaInvite(page: import('@playwright/test').Page, inviteUrl: string, username: string) {
-  await page.goto(inviteUrl);
-  if (await page.locator('.auth-screen').isVisible()) {
-    await page.getByRole('button', { name: /no account\? register/i }).click();
-    await page.getByPlaceholder('username').fill(username);
-    await page.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-  }
-}
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 test.describe('Message editing & deletion — author-only controls', () => {
   test('only message author sees edit and delete buttons', async ({ browser }) => {
     // User A: sends a message
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('editOwner');
     await register(pageA, usernameA);
@@ -24,15 +12,9 @@ test.describe('Message editing & deletion — author-only controls', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Copy invite link
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    // User B: joins the space
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
+    // User B: joins the space via invite
     const usernameB = uniqueUser('editViewer');
-    await joinViaInvite(pageB, inviteUrl, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
@@ -56,7 +38,7 @@ test.describe('Message editing & deletion — author-only controls', () => {
   });
 
   test('edited message is visible in real-time to other users', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('rtEditA');
     await register(pageA, usernameA);
@@ -64,13 +46,8 @@ test.describe('Message editing & deletion — author-only controls', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('rtEditB');
-    await joinViaInvite(pageB, inviteUrl, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 
@@ -97,7 +74,7 @@ test.describe('Message editing & deletion — author-only controls', () => {
   });
 
   test('deleted message disappears in real-time for other users', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('rtDelA');
     await register(pageA, usernameA);
@@ -105,13 +82,8 @@ test.describe('Message editing & deletion — author-only controls', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('rtDelB');
-    await joinViaInvite(pageB, inviteUrl, usernameB);
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
     await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
 

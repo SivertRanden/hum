@@ -1,17 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
-
-/** Join a space via its invite URL (handles auth screen if needed). */
-async function joinViaInvite(page: import('@playwright/test').Page, inviteUrl: string, username: string) {
-  await page.goto(inviteUrl);
-  if (await page.locator('.auth-screen').isVisible()) {
-    await page.getByRole('button', { name: /no account\? register/i }).click();
-    await page.getByPlaceholder('username').fill(username);
-    await page.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-  }
-}
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 /** Open the members list in the sidebar. */
 async function openMembersList(page: import('@playwright/test').Page) {
@@ -21,7 +9,7 @@ async function openMembersList(page: import('@playwright/test').Page) {
 
 test.describe('Admin dashboard', () => {
   test('admin dashboard button is only visible to the space owner', async ({ browser }) => {
-    const ctxOwner = await browser.newContext();
+    const ctxOwner = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageOwner = await ctxOwner.newPage();
     const ownerUsername = uniqueUser('adminOwner');
     await register(pageOwner, ownerUsername);
@@ -29,18 +17,12 @@ test.describe('Admin dashboard', () => {
     await createSpace(pageOwner, spaceName);
     await pageOwner.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Copy invite link
-    await pageOwner.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageOwner.evaluate(async () => navigator.clipboard.readText());
-
     // Owner sees the admin dashboard button
     await expect(pageOwner.locator('[aria-label="Admin dashboard"]')).toBeVisible({ timeout: 5_000 });
 
-    // Member joins
-    const ctxMember = await browser.newContext();
-    const pageMember = await ctxMember.newPage();
+    // Member joins via invite
     const memberUsername = uniqueUser('adminMember');
-    await joinViaInvite(pageMember, inviteUrl, memberUsername);
+    const { ctxGuest: ctxMember, pageGuest: pageMember } = await joinViaInvite(browser, pageOwner, memberUsername);
     await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageMember.locator('.channel-item', { hasText: 'general' }).click();
 
@@ -109,7 +91,7 @@ test.describe('Admin dashboard', () => {
   });
 
   test('owner can change member role via sidebar', async ({ browser }) => {
-    const ctxOwner = await browser.newContext();
+    const ctxOwner = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageOwner = await ctxOwner.newPage();
     const ownerUsername = uniqueUser('roleOwner');
     await register(pageOwner, ownerUsername);
@@ -117,15 +99,9 @@ test.describe('Admin dashboard', () => {
     await createSpace(pageOwner, spaceName);
     await pageOwner.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Copy invite link
-    await pageOwner.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageOwner.evaluate(async () => navigator.clipboard.readText());
-
-    // Member joins
-    const ctxMember = await browser.newContext();
-    const pageMember = await ctxMember.newPage();
+    // Member joins via invite
     const memberUsername = uniqueUser('roleMember');
-    await joinViaInvite(pageMember, inviteUrl, memberUsername);
+    const { ctxGuest: ctxMember, pageGuest: pageMember } = await joinViaInvite(browser, pageOwner, memberUsername);
     await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // Owner opens member list
@@ -145,7 +121,7 @@ test.describe('Admin dashboard', () => {
   });
 
   test('owner can kick a member from the space', async ({ browser }) => {
-    const ctxOwner = await browser.newContext();
+    const ctxOwner = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageOwner = await ctxOwner.newPage();
     const ownerUsername = uniqueUser('kickOwner');
     await register(pageOwner, ownerUsername);
@@ -153,15 +129,9 @@ test.describe('Admin dashboard', () => {
     await createSpace(pageOwner, spaceName);
     await pageOwner.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Copy invite link
-    await pageOwner.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteUrl = await pageOwner.evaluate(async () => navigator.clipboard.readText());
-
-    // Member joins
-    const ctxMember = await browser.newContext();
-    const pageMember = await ctxMember.newPage();
+    // Member joins via invite
     const memberUsername = uniqueUser('kickMember');
-    await joinViaInvite(pageMember, inviteUrl, memberUsername);
+    const { ctxGuest: ctxMember, pageGuest: pageMember } = await joinViaInvite(browser, pageOwner, memberUsername);
     await expect(pageMember.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // Owner opens member list and kicks the member
