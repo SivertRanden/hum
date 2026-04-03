@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { uniqueUser, register, createSpace } from './helpers';
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 test.describe('Message Reactions', () => {
   test('adds a reaction to a message', async ({ page }) => {
@@ -8,10 +8,12 @@ test.describe('Message Reactions', () => {
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
     // Send a message to react to
-    await page.locator('.compose input[type="text"]').fill('React to me!');
+    await page.locator('.compose input:not([type="file"])').fill('React to me!');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'React to me!' })).toBeVisible({ timeout: 5_000 });
 
+    // Hover the message row so the reaction button is interactable
+    await page.locator('.message', { has: page.locator('.msg-content', { hasText: 'React to me!' }) }).hover();
     // Open the emoji picker
     await page.locator('.reaction-add-btn').first().click();
     await expect(page.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
@@ -29,11 +31,12 @@ test.describe('Message Reactions', () => {
     await createSpace(page, `RmRxnSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input[type="text"]').fill('Remove my reaction!');
+    await page.locator('.compose input:not([type="file"])').fill('Remove my reaction!');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Remove my reaction!' })).toBeVisible({ timeout: 5_000 });
 
     // Add a reaction
+    await page.locator('.message', { has: page.locator('.msg-content', { hasText: 'Remove my reaction!' }) }).hover();
     await page.locator('.reaction-add-btn').first().click();
     await page.locator('.reaction-quick-btn').first().click();
     await expect(page.locator('.reaction-pill.mine')).toBeVisible({ timeout: 5_000 });
@@ -44,7 +47,7 @@ test.describe('Message Reactions', () => {
   });
 
   test('reaction count display reflects multiple users reacting', async ({ browser }) => {
-    // User A
+    // User A registers, creates space, and gets an invite link
     const ctxA = await browser.newContext();
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('rxnA');
@@ -53,36 +56,25 @@ test.describe('Message Reactions', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Get invite link
-    await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
-    const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
-
-    // User B joins
-    const ctxB = await browser.newContext();
-    const pageB = await ctxB.newPage();
-    const usernameB = uniqueUser('rxnB');
-    await pageB.goto('/');
-    await pageB.getByRole('button', { name: /no account\? register/i }).click();
-    await pageB.getByPlaceholder('username').fill(usernameB);
-    await pageB.getByPlaceholder('password', { exact: true }).fill('testpass123');
-    await pageB.getByRole('button', { name: /create account/i }).click();
-    await expect(pageB.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    await pageB.goto(inviteToken);
-    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 5_000 });
+    // User B joins via invite
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, uniqueUser('rxnB'));
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
     await pageB.locator('.channel-item', { hasText: 'general' }).click();
+    await expect(pageB.locator('.channel-item', { hasText: 'general' })).toHaveClass(/active/, { timeout: 5_000 });
 
     // User A sends a message
-    await pageA.locator('.compose input[type="text"]').fill('Count my reactions!');
+    await pageA.locator('.compose input:not([type="file"])').fill('Count my reactions!');
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageA.locator('.msg-content', { hasText: 'Count my reactions!' })).toBeVisible({ timeout: 5_000 });
 
     // User A adds a reaction
+    await pageA.locator('.message', { has: pageA.locator('.msg-content', { hasText: 'Count my reactions!' }) }).hover();
     await pageA.locator('.reaction-add-btn').first().click();
     await pageA.locator('.reaction-quick-btn').first().click();
     await expect(pageA.locator('.reaction-pill')).toBeVisible({ timeout: 5_000 });
 
     // User B sees the message with count 1, then adds the same reaction
-    await expect(pageB.locator('.msg-content', { hasText: 'Count my reactions!' })).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('.msg-content', { hasText: 'Count my reactions!' })).toBeVisible({ timeout: 10_000 });
     await expect(pageB.locator('.reaction-pill')).toBeVisible({ timeout: 5_000 });
     await pageB.locator('.reaction-pill').first().click();
 
@@ -99,10 +91,11 @@ test.describe('Message Reactions', () => {
     await createSpace(page, `RxnPickerSpace_${Date.now()}`);
     await page.locator('.channel-item', { hasText: 'general' }).click();
 
-    await page.locator('.compose input[type="text"]').fill('Emoji picker test');
+    await page.locator('.compose input:not([type="file"])').fill('Emoji picker test');
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Emoji picker test' })).toBeVisible({ timeout: 5_000 });
 
+    await page.locator('.message', { has: page.locator('.msg-content', { hasText: 'Emoji picker test' }) }).hover();
     await page.locator('.reaction-add-btn').first().click();
     await expect(page.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
 
