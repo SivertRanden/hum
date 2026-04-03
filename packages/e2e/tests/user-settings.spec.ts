@@ -13,7 +13,7 @@ test.describe('User settings dialog', () => {
     await expect(page.locator('button[title="Settings"]')).toBeVisible({ timeout: 5_000 });
 
     await openSettings(page);
-    await expect(page.locator('.settings-dialog h2')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
     // Close via overlay click or escape
     await page.keyboard.press('Escape');

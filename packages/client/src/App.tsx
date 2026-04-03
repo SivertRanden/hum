@@ -892,8 +892,10 @@ export default function App() {
     setSettings(next);
   }, []);
 
-  // Check for password reset token in URL
-  const resetToken = new URLSearchParams(window.location.search).get('reset_token');
+  // Manage password reset token as state so clearing it triggers a re-render
+  const [resetToken, setResetToken] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('reset_token')
+  );
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string>(DEFAULT_CHANNEL);
@@ -1420,9 +1422,9 @@ export default function App() {
   if (!auth) {
     if (resetToken) {
       return <ResetPasswordScreen token={resetToken} onDone={() => {
-        // Clear the token from the URL and show login
+        // Clear the token from the URL and show login; setResetToken triggers re-render
         window.history.replaceState({}, '', window.location.pathname);
-        setAuthView('login');
+        setResetToken(null);
       }} />;
     }
     if (authView === 'forgot') {
