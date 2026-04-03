@@ -770,6 +770,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .message {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 0.875rem;
 }
