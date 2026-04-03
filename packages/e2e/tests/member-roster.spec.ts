@@ -87,6 +87,7 @@ test.describe('Member roster & invite links', () => {
 
     await expect(page.locator('.channel-add-btn[title="Copy invite link"]')).toBeVisible({ timeout: 5_000 });
     await page.locator('.channel-add-btn[title="Copy invite link"]').click();
+    await expect(page.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
 
     const clipboardText = await page.evaluate(async () => navigator.clipboard.readText());
 

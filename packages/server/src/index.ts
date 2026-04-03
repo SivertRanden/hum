@@ -126,6 +126,13 @@ app.use('/api/spaces', apiLimiter, spacesRouter);
 app.use('/api/invite', apiLimiter, invitesRouter);
 app.use('/api/users', apiLimiter, usersRouter);
 
+// Global error handler — must be defined after all routes
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[hum] unhandled error:', err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 const server = createServer(app);
 createWsServer(server);
 

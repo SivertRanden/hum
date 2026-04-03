@@ -48,7 +48,7 @@ test.describe('Message Reactions', () => {
 
   test('reaction count display reflects multiple users reacting', async ({ browser }) => {
     // User A registers, creates space, and gets an invite link
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('rxnA');
     await register(pageA, usernameA);
