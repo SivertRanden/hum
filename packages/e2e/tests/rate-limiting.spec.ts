@@ -11,27 +11,39 @@ import { uniqueUser, register, createSpace } from './helpers';
 const WS_RATE_MAX = 20; // matches server constant
 
 /**
- * Opens a raw WebSocket connection in the page context, joins the general channel,
+ * Opens a raw WebSocket connection in the page context, joins the general channel
+ * of the given space (or the first space in the DB when spaceId is omitted),
  * sends `count` messages immediately, and returns the list of server responses
  * received for those messages (type: 'message' | 'error').
+ *
+ * NOTE: GET /api/spaces returns ALL spaces, not just those owned by the user.
+ * When testing DOM-visible messages always pass the explicit spaceId so the raw
+ * WS joins the same room as the page's own WebSocket.
  */
 async function sendManyMessages(
   page: ReturnType<import('@playwright/test').Browser['newPage']> extends Promise<infer P> ? P : never,
-  count: number
+  count: number,
+  spaceId?: number
 ): Promise<Array<{ type: string; error?: string }>> {
   return page.evaluate(
-    async ({ count }: { count: number }) => {
+    async ({ count, overrideSpaceId }: { count: number; overrideSpaceId: number | null }) => {
       const stored = localStorage.getItem('hum_auth');
       if (!stored) throw new Error('Not authenticated');
       const auth = JSON.parse(stored) as { token: string };
 
-      // Fetch space list to get the first space ID
-      const spacesResp = await fetch('/api/spaces', {
-        headers: { Authorization: `Bearer ${auth.token}` },
-      });
-      const spaces = (await spacesResp.json()) as Array<{ id: number }>;
-      if (!spaces.length) throw new Error('No spaces found');
-      const spaceId = spaces[0].id;
+      let resolvedSpaceId: number;
+      if (overrideSpaceId !== null) {
+        resolvedSpaceId = overrideSpaceId;
+      } else {
+        // Fallback: use the first space in the list (fine for tests that only
+        // check WS response counts, not DOM contents).
+        const spacesResp = await fetch('/api/spaces', {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        const spaces = (await spacesResp.json()) as Array<{ id: number }>;
+        if (!spaces.length) throw new Error('No spaces found');
+        resolvedSpaceId = spaces[0].id;
+      }
 
       return new Promise<Array<{ type: string; error?: string }>>((resolve, reject) => {
         const ws = new WebSocket(`ws://${window.location.host}/ws`);
@@ -43,7 +55,7 @@ async function sendManyMessages(
         }, 6_000);
 
         ws.onopen = () => {
-          ws.send(JSON.stringify({ type: 'join', spaceId, channelId: 'general', token: auth.token }));
+          ws.send(JSON.stringify({ type: 'join', spaceId: resolvedSpaceId, channelId: 'general', token: auth.token }));
         };
 
         ws.onmessage = (evt) => {
@@ -69,7 +81,7 @@ async function sendManyMessages(
         };
       });
     },
-    { count }
+    { count, overrideSpaceId: spaceId ?? null }
   );
 }
 
@@ -104,8 +116,26 @@ test.describe('Rate limiting on message endpoints', () => {
   });
 
   test('rate limited messages do not appear in the chat', async ({ page }) => {
+    // Capture the unique space name upfront so we can locate the space by name
+    // later. GET /api/spaces returns ALL spaces (no per-user filter), so we must
+    // search by the unique name rather than relying on spaces[0].
+    const spaceName = `RLChatSpace_${Date.now()}`;
     await register(page, uniqueUser('rlChat'));
-    await createSpace(page, `RLChatSpace_${Date.now()}`);
+    await createSpace(page, spaceName);
+
+    // Resolve the space ID by name so sendManyMessages joins the SAME room as
+    // the page's own WebSocket.  Without this the raw WS would join a different
+    // space (spaces[0] sorted by name) and its messages would never be broadcast
+    // to the page's WS, causing the DOM check to see 0 messages.
+    const spaceId = await page.evaluate(async (sName) => {
+      const auth = JSON.parse(localStorage.getItem('hum_auth')!) as { token: string };
+      const spaces = await fetch('/api/spaces', {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      }).then(r => r.json()) as Array<{ id: number; name: string }>;
+      const found = spaces.find(s => s.name === sName);
+      if (!found) throw new Error(`Space "${sName}" not found`);
+      return found.id;
+    }, spaceName);
 
     // Send a warmup message via the UI compose input to confirm the page's WS
     // has joined the room, and to consume 1 slot of the 20-message rate budget.
@@ -114,27 +144,24 @@ test.describe('Rate limiting on message endpoints', () => {
     await page.locator('input[placeholder^="Message #"]').press('Enter');
     await expect(page.locator('.msg-content', { hasText: warmupText })).toBeVisible({ timeout: 8_000 });
 
-    // Blast 25 messages via raw WebSocket. The warmup consumed 1 rate-limit slot,
-    // so only 19 of the 25 raw-WS messages are stored to the DB (not 25).
+    // Blast 25 messages via raw WebSocket in the SAME space as the page WS.
+    // The warmup consumed 1 rate-limit slot, so only 19 of the 25 are stored.
     // sendManyMessages resolves only after receiving all responses; each 'message'
-    // response from the server is a broadcast that happens AFTER the DB insert —
-    // so all 19 successful messages are committed to the DB before this returns.
-    await sendManyMessages(page, WS_RATE_MAX + 5);
+    // response is a broadcast that happens AFTER the DB insert, so all 19
+    // successful messages are committed to the DB before this returns.
+    await sendManyMessages(page, WS_RATE_MAX + 5, spaceId);
 
     // Verify via REST that the DB holds at most WS_RATE_MAX rate-test messages.
-    // Only stored messages can appear in chat (served from DB as history), so
+    // Only stored messages can appear in chat (served as history on WS join), so
     // this is the ground truth for what will be visible in the chat view.
-    const rateMsgCount = await page.evaluate(async () => {
+    const rateMsgCount = await page.evaluate(async ({ sid }: { sid: number }) => {
       const auth = JSON.parse(localStorage.getItem('hum_auth')!) as { token: string };
-      const spaces = await fetch('/api/spaces', {
-        headers: { Authorization: `Bearer ${auth.token}` },
-      }).then(r => r.json()) as Array<{ id: number }>;
       const messages = await fetch(
-        `/api/spaces/${spaces[0].id}/messages?channel=general`,
+        `/api/spaces/${sid}/messages?channel=general`,
         { headers: { Authorization: `Bearer ${auth.token}` } }
       ).then(r => r.json()) as Array<{ content: string }>;
       return messages.filter(m => m.content.startsWith('rate-test-')).length;
-    });
+    }, { sid: spaceId });
 
     expect(rateMsgCount).toBeLessThanOrEqual(WS_RATE_MAX);
     expect(rateMsgCount).toBeGreaterThan(0); // At least some messages got through
