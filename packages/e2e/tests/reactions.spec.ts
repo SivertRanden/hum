@@ -18,7 +18,8 @@ test.describe('Message Reactions', () => {
     await page.locator('.reaction-add-btn').first().click();
     await expect(page.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
 
-    // Click the first quick emoji (👍)
+    // Hover then click the first quick emoji (👍) — ensures it is interactive
+    await page.locator('.reaction-quick-btn').first().hover();
     await page.locator('.reaction-quick-btn').first().click();
 
     // The reaction pill should appear
@@ -38,6 +39,8 @@ test.describe('Message Reactions', () => {
     // Add a reaction
     await page.locator('.message', { has: page.locator('.msg-content', { hasText: 'Remove my reaction!' }) }).hover();
     await page.locator('.reaction-add-btn').first().click();
+    await expect(page.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
+    await page.locator('.reaction-quick-btn').first().hover();
     await page.locator('.reaction-quick-btn').first().click();
     await expect(page.locator('.reaction-pill.mine')).toBeVisible({ timeout: 5_000 });
 
@@ -70,6 +73,8 @@ test.describe('Message Reactions', () => {
     // User A adds a reaction
     await pageA.locator('.message', { has: pageA.locator('.msg-content', { hasText: 'Count my reactions!' }) }).hover();
     await pageA.locator('.reaction-add-btn').first().click();
+    await expect(pageA.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
+    await pageA.locator('.reaction-quick-btn').first().hover();
     await pageA.locator('.reaction-quick-btn').first().click();
     await expect(pageA.locator('.reaction-pill')).toBeVisible({ timeout: 5_000 });
 
