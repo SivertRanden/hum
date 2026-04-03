@@ -60,7 +60,7 @@ test.describe('Direct Messages', () => {
 
     // User A sends a message
     const msgFromA = 'Hello from A!';
-    await pageA.locator('.compose input[type="text"]').fill(msgFromA);
+    await pageA.locator('.compose input:not([type="file"])').fill(msgFromA);
     await pageA.getByRole('button', { name: /^send$/i }).click();
     await expect(pageA.locator('.msg-content', { hasText: msgFromA })).toBeVisible({ timeout: 5_000 });
 
@@ -74,7 +74,7 @@ test.describe('Direct Messages', () => {
 
     // User B replies
     const msgFromB = 'Hello back from B!';
-    await pageB.locator('.compose input[type="text"]').fill(msgFromB);
+    await pageB.locator('.compose input:not([type="file"])').fill(msgFromB);
     await pageB.getByRole('button', { name: /^send$/i }).click();
     await expect(pageB.locator('.msg-content', { hasText: msgFromB })).toBeVisible({ timeout: 5_000 });
 
