@@ -107,16 +107,22 @@ test.describe('Rate limiting on message endpoints', () => {
     await register(page, uniqueUser('rlChat'));
     await createSpace(page, `RLChatSpace_${Date.now()}`);
 
-    // Wait for the empty-state message which confirms the page's WS has joined
-    // the room and received history. Without this, messages sent by the raw WS
-    // can be broadcast before the page's WS is subscribed, so they are missed.
-    await expect(page.locator('.empty-state')).toBeVisible({ timeout: 5_000 });
+    // Send a warmup message via the UI compose input and wait for it to appear.
+    // This is the only reliable way to confirm the page's WebSocket has joined
+    // the room — the empty-state is a false positive (it appears as soon as
+    // messages = [], which happens synchronously before the async WS join).
+    const warmupText = `warmup-${Date.now()}`;
+    await page.locator('input[placeholder^="Message #"]').fill(warmupText);
+    await page.locator('input[placeholder^="Message #"]').press('Enter');
+    await expect(page.locator('.msg-content', { hasText: warmupText })).toBeVisible({ timeout: 8_000 });
 
-    // Blast 25 messages via raw WebSocket — only 20 succeed (rate limit).
-    // The page's WS is now subscribed and will receive all 20 broadcasts.
+    // Now blast 25 messages via raw WebSocket. The warmup already consumed 1
+    // of the 20-message rate-limit budget, so only 19 of these 25 will succeed.
+    // The page's WS is subscribed and will receive all successful broadcasts.
     await sendManyMessages(page, WS_RATE_MAX + 5);
 
-    // The chat should contain at most 20 of the rate-test messages (not 25)
+    // The chat should contain at most WS_RATE_MAX - 1 = 19 rate-test messages
+    // (not all 25), proving the rate limit is enforced.
     const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
     await expect(rateMsgs.first()).toBeVisible({ timeout: 5_000 });
     const count = await rateMsgs.count();
