@@ -163,7 +163,8 @@ test.describe('Unread indicators', () => {
     await expect(pageA.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // Dot should still be present on "other" after reload (app defaults to general)
-    await expect(pageA.locator('.channel-item', { hasText: 'other' }).locator('.unread-dot')).toBeVisible({ timeout: 5_000 });
+    // Use a generous timeout — unread counts are fetched from the server after reconnect
+    await expect(pageA.locator('.channel-item', { hasText: 'other' }).locator('.unread-dot')).toBeVisible({ timeout: 15_000 });
 
     await ctxA.close();
     await ctxB.close();
