@@ -107,18 +107,17 @@ test.describe('Rate limiting on message endpoints', () => {
     await register(page, uniqueUser('rlChat'));
     await createSpace(page, `RLChatSpace_${Date.now()}`);
 
-    // Navigate to the general channel
-    await page.locator('.channel-item', { hasText: 'general' }).click();
+    // createSpace already lands on the general channel — confirm before sending
     await expect(page.locator('.main-header')).toContainText('general', { timeout: 5_000 });
 
     // Blast 25 messages via raw WebSocket — only 20 should appear in chat
     await sendManyMessages(page, WS_RATE_MAX + 5);
 
-    // Wait for messages to propagate to the UI
-    await page.waitForTimeout(500);
+    // Poll until at least one message appears (avoids a fixed-wait race)
+    const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
+    await expect(rateMsgs.first()).toBeVisible({ timeout: 5_000 });
 
     // The chat should contain at most 20 of the rate-test messages (not 25)
-    const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
     const count = await rateMsgs.count();
     expect(count).toBeLessThanOrEqual(WS_RATE_MAX);
     expect(count).toBeGreaterThan(0); // At least some messages got through
