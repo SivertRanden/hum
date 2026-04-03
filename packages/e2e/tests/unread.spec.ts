@@ -158,7 +158,8 @@ test.describe('Unread indicators', () => {
     // Reload user A's page
     await pageA.reload();
     await expect(pageA.locator('.app-shell')).toBeVisible({ timeout: 10_000 });
-    // Wait for the space to re-render after reload
+    // The app does not auto-select the last space on reload — click it in the rail.
+    await pageA.locator(`.server-icon[title="${spaceName}"]`).click();
     await expect(pageA.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
 
     // Dot should still be present on "other" after reload (app defaults to general)
