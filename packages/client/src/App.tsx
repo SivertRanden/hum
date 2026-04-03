@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, Space, Channel, SpaceMember, SpaceRole, DmChannel, SearchResult, UserProfile, SpaceEmoji, PinnedMessage } from './api.js';
-import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview } from './useSocket.js';
+import { useSocket, HumMessage, VoicePeer, PresenceUpdate, MentionEvent, ChannelNewMessageEvent, ReactionGroup, ReactionEvent, LinkPreviewEvent, LinkPreview, MemberJoinedEvent } from './useSocket.js';
 import { useLiveKitVoice, RemoteScreen } from './useLiveKitVoice.js';
 import { UserSettingsDialog, HumSettings, DEFAULT_SETTINGS } from './components/UserSettingsDialog.js';
 
@@ -1149,6 +1149,22 @@ export default function App() {
     setMsgLinkPreviews(prev => ({ ...prev, [messageId]: previews }));
   }, []);
 
+  const onMemberJoined = useCallback((event: MemberJoinedEvent) => {
+    setMembers(prev => {
+      if (prev.some(m => m.user_id === event.member.userId)) return prev;
+      const newMember: SpaceMember = {
+        id: event.member.userId,
+        space_id: event.spaceId,
+        user_id: event.member.userId,
+        role: event.member.role as SpaceRole,
+        joined_at: event.member.joinedAt,
+        username: event.member.username,
+        is_online: true,
+      };
+      return [...prev, newMember];
+    });
+  }, []);
+
   const onMessageEdit = useCallback((msg: HumMessage) => {
     setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: msg.content, editedAt: msg.editedAt } : m));
   }, []);
@@ -1274,6 +1290,7 @@ export default function App() {
           onChannelNewMessage,
           onReaction,
           onLinkPreview,
+          onMemberJoined,
         }
       : { token: '', spaceId: null, channelId: null, onMessage, onHistory, onError }
   );
