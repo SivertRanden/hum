@@ -80,3 +80,5 @@ jobs:
 
       - name: Run E2E tests
         run: pnpm --filter @hum/e2e test
+        env:
+          DISABLE_RATE_LIMIT: 1
