@@ -1193,22 +1193,6 @@ export default function App() {
     ));
   }, []);
 
-  const onMemberJoined = useCallback((event: MemberJoinedEvent) => {
-    setMembers(prev => {
-      if (prev.some(m => m.user_id === event.member.userId)) return prev;
-      const newMember: SpaceMember = {
-        id: event.member.userId,
-        space_id: event.spaceId,
-        user_id: event.member.userId,
-        role: event.member.role as SpaceRole,
-        joined_at: event.member.joinedAt,
-        username: event.member.username,
-        is_online: true,
-      };
-      return [...prev, newMember];
-    });
-  }, []);
-
   const handleEditMessage = useCallback((id: number, content: string) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content, editedAt: Math.floor(Date.now() / 1000) } : m));
   }, []);
