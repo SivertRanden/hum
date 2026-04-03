@@ -22,7 +22,7 @@ async function setupTwoUsersInSpace(browser: any) {
   await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
   const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
-  const ctxB = await browser.newContext();
+  const ctxB = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
   const pageB = await ctxB.newPage();
   const usernameB = uniqueUser('dmB');
   await pageB.goto('/');

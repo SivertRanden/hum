@@ -105,7 +105,7 @@ test.describe('Channel topics', () => {
     await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
     const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
-    const ctxB = await browser.newContext();
+    const ctxB = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('topicDmB');
     await pageB.goto('/');
@@ -221,7 +221,7 @@ test.describe('User profiles', () => {
     await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
     const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
-    const ctxB = await browser.newContext();
+    const ctxB = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('profOtherB');
     await pageB.goto('/');

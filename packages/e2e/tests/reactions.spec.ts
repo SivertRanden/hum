@@ -59,7 +59,7 @@ test.describe('Message Reactions', () => {
     const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
     // User B joins
-    const ctxB = await browser.newContext();
+    const ctxB = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageB = await ctxB.newPage();
     const usernameB = uniqueUser('rxnB');
     await pageB.goto('/');
