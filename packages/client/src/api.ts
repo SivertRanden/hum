@@ -225,7 +225,7 @@ export const api = {
     get<UserProfile>(`/users/${userId}`, token),
 
   updateUserProfile: (token: string, userId: number, displayName: string | null) =>
-    patch<UserProfile>(`/users/${userId}/profile`, { displayName }, token),
+    patch<UserProfile>(`/users/${userId}`, { displayName }, token),
 
   uploadAvatar: async (token: string, userId: number, file: File): Promise<{ avatarUrl: string }> => {
     const form = new FormData();
