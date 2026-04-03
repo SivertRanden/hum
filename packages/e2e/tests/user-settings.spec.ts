@@ -3,17 +3,17 @@ import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
 
 /** Open user settings dialog via the gear button. */
 async function openSettings(page: import('@playwright/test').Page) {
-  await page.locator('.user-settings-btn').click();
+  await page.locator('button[title="Settings"]').click();
   await expect(page.locator('.settings-dialog')).toBeVisible({ timeout: 5_000 });
 }
 
 test.describe('User settings dialog', () => {
   test('opens and closes settings dialog via gear button', async ({ page }) => {
     await register(page, uniqueUser('settingsOpen'));
-    await expect(page.locator('.user-settings-btn')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('button[title="Settings"]')).toBeVisible({ timeout: 5_000 });
 
     await openSettings(page);
-    await expect(page.locator('.settings-dialog h2')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
     // Close via overlay click or escape
     await page.keyboard.press('Escape');

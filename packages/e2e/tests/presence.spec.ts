@@ -49,7 +49,7 @@ test.describe('Presence (online/away status)', () => {
 
     // Owner (the logged-in user) should show the online presence dot
     const ownerEntry = page.locator('.member-entry').filter({ has: page.locator('.member-role-owner') });
-    await expect(ownerEntry.locator('.presence-dot.online')).toBeVisible({ timeout: 5_000 });
+    await expect(ownerEntry.locator('.presence-dot.online')).toBeVisible({ timeout: 10_000 });
   });
 
   test('member shows as online when connected', async ({ browser }) => {

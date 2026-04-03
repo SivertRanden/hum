@@ -265,3 +265,14 @@ router.get('/github/callback', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// Test-only: expose the latest reset token (only when DISABLE_RATE_LIMIT is set)
+if (process.env.DISABLE_RATE_LIMIT) {
+  router.get('/test/latest-reset-token', async (req: Request, res: Response) => {
+    const email = req.query['email'] as string | undefined;
+    if (!email) { res.status(400).json({ error: 'email required' }); return; }
+    const token = await queries.getLatestResetTokenForEmail(email);
+    if (!token) { res.status(404).json({ error: 'no token found' }); return; }
+    res.json({ token });
+  });
+}

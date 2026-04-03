@@ -20,7 +20,7 @@ test.describe('Full-text search', () => {
 
     // Send a uniquely identifiable message
     const uniquePhrase = `findme_${Date.now()}`;
-    await page.locator('.compose input[type="text"]').fill(uniquePhrase);
+    await page.locator('.compose input:not([type="file"])').fill(uniquePhrase);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: uniquePhrase })).toBeVisible({ timeout: 5_000 });
 
@@ -61,7 +61,7 @@ test.describe('Full-text search', () => {
     await page.locator('.channel-item', { hasText: 'secondary' }).click();
 
     const uniquePhrase = `navmsg_${Date.now()}`;
-    await page.locator('.compose input[type="text"]').fill(uniquePhrase);
+    await page.locator('.compose input:not([type="file"])').fill(uniquePhrase);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: uniquePhrase })).toBeVisible({ timeout: 5_000 });
 
@@ -86,7 +86,7 @@ test.describe('Full-text search', () => {
     // Post in general
     await page.locator('.channel-item', { hasText: 'general' }).click();
     const keyword = `multiterm_${Date.now()}`;
-    await page.locator('.compose input[type="text"]').fill(`${keyword} in general`);
+    await page.locator('.compose input:not([type="file"])').fill(`${keyword} in general`);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: `${keyword} in general` })).toBeVisible({ timeout: 5_000 });
 
@@ -96,7 +96,7 @@ test.describe('Full-text search', () => {
     await page.locator('button.channel-create-submit').click();
     await expect(page.locator('.channel-item', { hasText: 'other' })).toBeVisible();
     await page.locator('.channel-item', { hasText: 'other' }).click();
-    await page.locator('.compose input[type="text"]').fill(`${keyword} in other`);
+    await page.locator('.compose input:not([type="file"])').fill(`${keyword} in other`);
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: `${keyword} in other` })).toBeVisible({ timeout: 5_000 });
 

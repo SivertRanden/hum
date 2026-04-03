@@ -227,6 +227,13 @@ function leaveVoiceRoom(socket: HumSocket, spaceId: number, channelId: string) {
 export function createWsServer(server: import('http').Server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
+  // Absorb server-level errors (e.g. ECONNRESET during Vite proxy teardown in E2E).
+  wss.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') {
+      console.error('[ws] server error:', err);
+    }
+  });
+
   wss.on('connection', (socket: HumSocket, _req: IncomingMessage) => {
     // Track which voice rooms this socket has joined (for cleanup on disconnect)
     const activeVoiceRooms = new Set<string>(); // "<spaceId>:<channelId>"

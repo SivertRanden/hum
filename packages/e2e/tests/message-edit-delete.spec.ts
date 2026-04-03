@@ -1,0 +1,106 @@
+import { test, expect } from '@playwright/test';
+import { uniqueUser, register, createSpace, joinViaInvite } from './helpers';
+
+test.describe('Message editing & deletion — author-only controls', () => {
+  test('only message author sees edit and delete buttons', async ({ browser }) => {
+    // User A: sends a message
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+    const pageA = await ctxA.newPage();
+    const usernameA = uniqueUser('editOwner');
+    await register(pageA, usernameA);
+    const spaceName = `EditOwnerSpace_${Date.now()}`;
+    await createSpace(pageA, spaceName);
+    await pageA.locator('.channel-item', { hasText: 'general' }).click();
+
+    // User B: joins the space via invite
+    const usernameB = uniqueUser('editViewer');
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
+    await pageB.locator('.channel-item', { hasText: 'general' }).click();
+
+    // User A sends a message
+    const msg = 'Message from A';
+    await pageA.locator('.compose input:not([type="file"])').fill(msg);
+    await pageA.getByRole('button', { name: /^send$/i }).click();
+    await expect(pageA.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
+
+    // User A can see edit/delete controls on their own message
+    await expect(pageA.locator('[title="Edit"]').first()).toBeVisible();
+    await expect(pageA.locator('.msg-action-delete').first()).toBeVisible();
+
+    // User B sees the message but NOT the edit/delete controls
+    await expect(pageB.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('[title="Edit"]')).not.toBeVisible();
+    await expect(pageB.locator('.msg-action-delete')).not.toBeVisible();
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+
+  test('edited message is visible in real-time to other users', async ({ browser }) => {
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+    const pageA = await ctxA.newPage();
+    const usernameA = uniqueUser('rtEditA');
+    await register(pageA, usernameA);
+    const spaceName = `RTEditSpace_${Date.now()}`;
+    await createSpace(pageA, spaceName);
+    await pageA.locator('.channel-item', { hasText: 'general' }).click();
+
+    const usernameB = uniqueUser('rtEditB');
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
+    await pageB.locator('.channel-item', { hasText: 'general' }).click();
+
+    // A sends original message
+    const original = 'Before edit';
+    await pageA.locator('.compose input:not([type="file"])').fill(original);
+    await pageA.getByRole('button', { name: /^send$/i }).click();
+    await expect(pageB.locator('.msg-content', { hasText: original })).toBeVisible({ timeout: 5_000 });
+
+    // A edits the message
+    const updated = 'After edit';
+    await pageA.locator('[title="Edit"]').first().click();
+    await pageA.locator('.msg-edit-input').clear();
+    await pageA.locator('.msg-edit-input').fill(updated);
+    await pageA.locator('.msg-edit-save').click();
+
+    // B sees updated content and (edited) indicator
+    await expect(pageB.locator('.msg-content', { hasText: updated })).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('.msg-edited')).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator('.msg-content', { hasText: original })).not.toBeVisible();
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+
+  test('deleted message disappears in real-time for other users', async ({ browser }) => {
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+    const pageA = await ctxA.newPage();
+    const usernameA = uniqueUser('rtDelA');
+    await register(pageA, usernameA);
+    const spaceName = `RTDelSpace_${Date.now()}`;
+    await createSpace(pageA, spaceName);
+    await pageA.locator('.channel-item', { hasText: 'general' }).click();
+
+    const usernameB = uniqueUser('rtDelB');
+    const { ctxGuest: ctxB, pageGuest: pageB } = await joinViaInvite(browser, pageA, usernameB);
+    await expect(pageB.locator('.channel-server-name', { hasText: spaceName })).toBeVisible({ timeout: 10_000 });
+    await pageB.locator('.channel-item', { hasText: 'general' }).click();
+
+    // A sends message
+    const msg = 'Message to be deleted';
+    await pageA.locator('.compose input:not([type="file"])').fill(msg);
+    await pageA.getByRole('button', { name: /^send$/i }).click();
+    await expect(pageB.locator('.msg-content', { hasText: msg })).toBeVisible({ timeout: 5_000 });
+
+    // A deletes the message
+    await pageA.locator('.msg-action-delete').click();
+    await expect(pageA.locator('.msg-content', { hasText: msg })).not.toBeVisible({ timeout: 5_000 });
+
+    // B no longer sees the message
+    await expect(pageB.locator('.msg-content', { hasText: msg })).not.toBeVisible({ timeout: 5_000 });
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+});
