@@ -2179,3 +2179,146 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 0.7rem;
   color: var(--text-dim);
 }
+
+/* ── User Profile Card ───────────────────────────────────────────────────── */
+.profile-card-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.profile-card-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 4px;
+}
+.profile-card-close:hover { color: var(--text); background: var(--border); }
+
+.profile-card-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-avatar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-avatar-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+}
+.profile-avatar-btn:hover { color: var(--text); background: var(--border); }
+.profile-avatar-remove:hover { color: var(--hum-error); border-color: var(--hum-error); }
+
+.profile-card-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-card-username {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.profile-card-display-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-card-edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.profile-card-edit-btn:hover { color: var(--text); background: var(--border); }
+
+.profile-card-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.profile-card-input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.875rem;
+  padding: 6px 10px;
+  width: 100%;
+  outline: none;
+}
+.profile-card-input:focus { border-color: var(--accent); }
+
+.profile-card-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.profile-card-save {
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 5px 14px;
+}
+.profile-card-save:disabled { opacity: 0.5; cursor: default; }
+.profile-card-save:hover:not(:disabled) { opacity: 0.9; }
+
+.profile-card-cancel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 5px 14px;
+}
+.profile-card-cancel:hover { color: var(--text); background: var(--border); }

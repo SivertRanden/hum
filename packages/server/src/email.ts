@@ -1,6 +1,15 @@
 import { Resend } from 'resend';
 import type { PendingNotification } from './db.js';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_ADDRESS = process.env.EMAIL_FROM ?? 'noreply@hum.app';
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
@@ -12,13 +21,13 @@ if (RESEND_API_KEY) {
 
 export async function sendDigestEmail(to: string, username: string, notifications: PendingNotification[]): Promise<void> {
   const items = notifications.map(n =>
-    `<li><b>@${n.sender_username}</b> in <b>#${n.channel}</b> (${n.space_name}): ${n.message_content.slice(0, 200)}</li>`
+    `<li><b>@${escapeHtml(n.sender_username)}</b> in <b>#${escapeHtml(n.channel)}</b> (${escapeHtml(n.space_name)}): ${escapeHtml(n.message_content.slice(0, 200))}</li>`
   ).join('');
   const html = `
-    <p>Hi ${username},</p>
+    <p>Hi ${escapeHtml(username)},</p>
     <p>You were mentioned while you were away:</p>
     <ul>${items}</ul>
-    <p><a href="${CLIENT_ORIGIN}">Open hum</a></p>
+    <p><a href="${escapeHtml(CLIENT_ORIGIN)}">Open hum</a></p>
   `;
 
   if (!resend) {
@@ -48,9 +57,9 @@ export async function sendPasswordResetEmail(to: string, username: string, token
     to,
     subject: 'Reset your hum password',
     html: `
-      <p>Hi ${username},</p>
+      <p>Hi ${escapeHtml(username)},</p>
       <p>Click the link below to reset your password. The link expires in 1 hour.</p>
-      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p><a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>
       <p>If you didn't request this, you can ignore this email.</p>
     `,
   });
