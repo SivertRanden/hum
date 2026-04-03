@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { queries } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware.js';
+import { broadcastToSpace } from '../ws.js';
 
 const router = Router();
 
@@ -26,6 +27,12 @@ router.post('/:token/join', requireAuth, async (req: AuthRequest, res: Response)
 
   await queries.addSpaceMember(invite.space_id, req.user!.userId, 'member');
   await queries.incrementInviteUses(token);
+
+  broadcastToSpace(invite.space_id, {
+    type: 'member:joined',
+    spaceId: invite.space_id,
+    member: { userId: req.user!.userId, username: req.user!.username, role: 'member', joinedAt: Math.floor(Date.now() / 1000) },
+  });
 
   res.json({ space });
 });

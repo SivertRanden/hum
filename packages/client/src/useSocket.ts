@@ -79,6 +79,12 @@ export interface LinkPreviewEvent {
   linkPreview: { messageId: number; previews: LinkPreview[] };
 }
 
+export interface MemberJoinedEvent {
+  type: 'member:joined';
+  spaceId: number;
+  member: { userId: number; username: string; role: string; joinedAt: number };
+}
+
 type ServerEvent =
   | { type: 'joined'; spaceId: number; channelId: string }
   | { type: 'history'; messages: HumMessage[] }
@@ -92,7 +98,8 @@ type ServerEvent =
   | MentionEvent
   | ChannelNewMessageEvent
   | ReactionEvent
-  | LinkPreviewEvent;
+  | LinkPreviewEvent
+  | MemberJoinedEvent;
 
 interface UseSocketOptions {
   token: string;
@@ -110,9 +117,10 @@ interface UseSocketOptions {
   onChannelNewMessage?: (event: ChannelNewMessageEvent) => void;
   onReaction?: (event: ReactionEvent) => void;
   onLinkPreview?: (event: LinkPreviewEvent) => void;
+  onMemberJoined?: (event: MemberJoinedEvent) => void;
 }
 
-export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage, onReaction, onLinkPreview }: UseSocketOptions) {
+export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onError, onMessageEdit, onMessageDelete, onVoiceEvent, onTyping, onPresenceUpdate, onMention, onChannelNewMessage, onReaction, onLinkPreview, onMemberJoined }: UseSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const joinedSpaceRef = useRef<number | null>(null);
   const joinedChannelRef = useRef<string | null>(null);
@@ -149,6 +157,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
 
   const onLinkPreviewRef = useRef(onLinkPreview);
   onLinkPreviewRef.current = onLinkPreview;
+
+  const onMemberJoinedRef = useRef(onMemberJoined);
+  onMemberJoinedRef.current = onMemberJoined;
 
   const send = useCallback((data: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -208,6 +219,9 @@ export function useSocket({ token, spaceId, channelId, onMessage, onHistory, onE
       }
       else if (event.type === 'message:link_preview') {
         onLinkPreviewRef.current?.(event as LinkPreviewEvent);
+      }
+      else if (event.type === 'member:joined') {
+        onMemberJoinedRef.current?.(event as MemberJoinedEvent);
       }
       else if (event.type.startsWith('voice:')) {
         onVoiceEventRef.current?.(event as VoiceServerEvent);

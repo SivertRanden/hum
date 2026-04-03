@@ -36,8 +36,10 @@ interface ServerMessage {
   type: 'joined' | 'message' | 'message:edit' | 'message:delete' | 'error' | 'history'
       | 'voice:joined' | 'voice:presence' | 'voice:peer_left'
       | 'typing' | 'presence_update' | 'mention' | 'channel:new_message' | 'message:reaction'
-      | 'message:link_preview' | 'member:role_update' | 'member:kick';
+      | 'message:link_preview' | 'member:role_update' | 'member:kick' | 'member:joined';
   role?: string;
+  // member:joined payload
+  member?: { userId: number; username: string; role: string; joinedAt: number };
   // link preview fields
   linkPreview?: { messageId: number; previews: LinkPreview[] };
   spaceId?: number;
@@ -140,7 +142,7 @@ export function getOnlineUserIds(): Set<number> {
   return new Set(connectedUsers.keys());
 }
 
-function broadcastToSpace(spaceId: number, payload: ServerMessage, exclude?: HumSocket) {
+export function broadcastToSpace(spaceId: number, payload: ServerMessage, exclude?: HumSocket) {
   const conns = spaceConnections.get(spaceId);
   if (!conns) return;
   const data = JSON.stringify(payload);
