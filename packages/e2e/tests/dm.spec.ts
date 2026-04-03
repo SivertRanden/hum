@@ -8,7 +8,7 @@ import { uniqueUser, register, createSpace } from './helpers';
  * Returns page/context handles and usernames for both.
  */
 async function setupTwoUsersInSpace(browser: any) {
-  const ctxA = await browser.newContext();
+  const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
   const pageA = await ctxA.newPage();
   const usernameA = uniqueUser('dmA');
   await register(pageA, usernameA);
@@ -16,8 +16,10 @@ async function setupTwoUsersInSpace(browser: any) {
   await createSpace(pageA, spaceName);
   await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-  // Copy invite link so user B can join
+  // Copy invite link so user B can join.
+  // Wait for the "Copied!" state to confirm the async HTTP+clipboard write is done.
   await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
+  await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
   const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
   const ctxB = await browser.newContext();

@@ -47,6 +47,8 @@ export async function joinViaInvite(
   guestUsername: string,
 ): Promise<{ ctxGuest: BrowserContext; pageGuest: Page }> {
   await pageHost.locator('.channel-add-btn[title="Copy invite link"]').click();
+  // Wait for the async HTTP request + clipboard write to complete before reading.
+  await expect(pageHost.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
   const inviteUrl = await pageHost.evaluate(() => navigator.clipboard.readText());
 
   const ctxGuest = await browser.newContext();

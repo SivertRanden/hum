@@ -45,7 +45,7 @@ test.describe('Message Reactions', () => {
 
   test('reaction count display reflects multiple users reacting', async ({ browser }) => {
     // User A
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('rxnA');
     await register(pageA, usernameA);
@@ -53,8 +53,9 @@ test.describe('Message Reactions', () => {
     await createSpace(pageA, spaceName);
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
-    // Get invite link
+    // Get invite link — wait for "Copied!" to confirm the clipboard write completed.
     await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
+    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
     const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
     // User B joins

@@ -93,7 +93,7 @@ test.describe('Channel topics', () => {
   });
 
   test('topic does not appear for DM conversations', async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('topicDmA');
     await register(pageA, usernameA);
@@ -102,6 +102,7 @@ test.describe('Channel topics', () => {
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
     await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
+    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
     const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
     const ctxB = await browser.newContext();
@@ -208,7 +209,7 @@ test.describe('User profiles', () => {
   });
 
   test("another user's profile card does not show the edit button", async ({ browser }) => {
-    const ctxA = await browser.newContext();
+    const ctxA = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const pageA = await ctxA.newPage();
     const usernameA = uniqueUser('profOtherA');
     await register(pageA, usernameA);
@@ -217,6 +218,7 @@ test.describe('User profiles', () => {
     await pageA.locator('.channel-item', { hasText: 'general' }).click();
 
     await pageA.locator('.channel-add-btn[title="Copy invite link"]').click();
+    await expect(pageA.locator('.channel-add-btn[title="Copied!"]')).toBeVisible({ timeout: 10_000 });
     const inviteToken = await pageA.evaluate(async () => navigator.clipboard.readText());
 
     const ctxB = await browser.newContext();
