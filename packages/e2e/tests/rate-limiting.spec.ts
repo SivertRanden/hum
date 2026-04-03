@@ -110,14 +110,17 @@ test.describe('Rate limiting on message endpoints', () => {
     // createSpace already lands on the general channel — confirm before sending
     await expect(page.locator('.main-header')).toContainText('general', { timeout: 5_000 });
 
-    // Blast 25 messages via raw WebSocket — only 20 should appear in chat
+    // Blast 25 messages via raw WebSocket — only 20 succeed (rate limit)
     await sendManyMessages(page, WS_RATE_MAX + 5);
 
-    // Poll until at least one message appears (avoids a fixed-wait race)
-    const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
-    await expect(rateMsgs.first()).toBeVisible({ timeout: 5_000 });
+    // Reload so the page fetches history from the DB; this guarantees we see
+    // exactly the messages that were persisted (≤20), not a live-broadcast race.
+    await page.reload();
+    await expect(page.locator('.main-header')).toContainText('general', { timeout: 5_000 });
 
     // The chat should contain at most 20 of the rate-test messages (not 25)
+    const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
+    await expect(rateMsgs.first()).toBeVisible({ timeout: 5_000 });
     const count = await rateMsgs.count();
     expect(count).toBeLessThanOrEqual(WS_RATE_MAX);
     expect(count).toBeGreaterThan(0); // At least some messages got through
