@@ -107,16 +107,14 @@ test.describe('Rate limiting on message endpoints', () => {
     await register(page, uniqueUser('rlChat'));
     await createSpace(page, `RLChatSpace_${Date.now()}`);
 
-    // createSpace already lands on the general channel — confirm before sending
-    await expect(page.locator('.main-header')).toContainText('general', { timeout: 5_000 });
+    // Wait for the empty-state message which confirms the page's WS has joined
+    // the room and received history. Without this, messages sent by the raw WS
+    // can be broadcast before the page's WS is subscribed, so they are missed.
+    await expect(page.locator('.empty-state')).toBeVisible({ timeout: 5_000 });
 
-    // Blast 25 messages via raw WebSocket — only 20 succeed (rate limit)
+    // Blast 25 messages via raw WebSocket — only 20 succeed (rate limit).
+    // The page's WS is now subscribed and will receive all 20 broadcasts.
     await sendManyMessages(page, WS_RATE_MAX + 5);
-
-    // Reload so the page fetches history from the DB; this guarantees we see
-    // exactly the messages that were persisted (≤20), not a live-broadcast race.
-    await page.reload();
-    await expect(page.locator('.main-header')).toContainText('general', { timeout: 5_000 });
 
     // The chat should contain at most 20 of the rate-test messages (not 25)
     const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
