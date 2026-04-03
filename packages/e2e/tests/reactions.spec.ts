@@ -12,6 +12,8 @@ test.describe('Message Reactions', () => {
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'React to me!' })).toBeVisible({ timeout: 5_000 });
 
+    // Hover the message to make the reaction button interactable
+    await page.locator('.msg-content', { hasText: 'React to me!' }).hover();
     // Open the emoji picker
     await page.locator('.reaction-add-btn').first().click();
     await expect(page.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
@@ -34,6 +36,7 @@ test.describe('Message Reactions', () => {
     await expect(page.locator('.msg-content', { hasText: 'Remove my reaction!' })).toBeVisible({ timeout: 5_000 });
 
     // Add a reaction
+    await page.locator('.msg-content', { hasText: 'Remove my reaction!' }).hover();
     await page.locator('.reaction-add-btn').first().click();
     await page.locator('.reaction-quick-btn').first().click();
     await expect(page.locator('.reaction-pill.mine')).toBeVisible({ timeout: 5_000 });
@@ -77,6 +80,7 @@ test.describe('Message Reactions', () => {
     await expect(pageA.locator('.msg-content', { hasText: 'Count my reactions!' })).toBeVisible({ timeout: 5_000 });
 
     // User A adds a reaction
+    await pageA.locator('.msg-content', { hasText: 'Count my reactions!' }).hover();
     await pageA.locator('.reaction-add-btn').first().click();
     await pageA.locator('.reaction-quick-btn').first().click();
     await expect(pageA.locator('.reaction-pill')).toBeVisible({ timeout: 5_000 });
@@ -103,6 +107,7 @@ test.describe('Message Reactions', () => {
     await page.getByRole('button', { name: /^send$/i }).click();
     await expect(page.locator('.msg-content', { hasText: 'Emoji picker test' })).toBeVisible({ timeout: 5_000 });
 
+    await page.locator('.msg-content', { hasText: 'Emoji picker test' }).hover();
     await page.locator('.reaction-add-btn').first().click();
     await expect(page.locator('.reaction-picker')).toBeVisible({ timeout: 3_000 });
 

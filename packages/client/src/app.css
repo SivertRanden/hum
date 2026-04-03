@@ -842,12 +842,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Message actions (edit/delete) ───────────────────────────────────────── */
 .message { position: relative; }
-.message:hover .msg-actions { opacity: 1; }
+.message:hover .msg-actions { opacity: 1; pointer-events: auto; }
 
 .msg-actions {
   display: flex;
   gap: 4px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s;
   flex-shrink: 0;
 }
