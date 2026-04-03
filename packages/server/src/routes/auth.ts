@@ -18,8 +18,8 @@ router.post('/register', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'username must be 2–32 characters' });
     return;
   }
-  if (password.length < 6) {
-    res.status(400).json({ error: 'password must be at least 6 characters' });
+  if (password.length < 8) {
+    res.status(400).json({ error: 'password must be at least 8 characters' });
     return;
   }
 
@@ -97,8 +97,8 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'token and password required' });
     return;
   }
-  if (password.length < 6) {
-    res.status(400).json({ error: 'password must be at least 6 characters' });
+  if (password.length < 8) {
+    res.status(400).json({ error: 'password must be at least 8 characters' });
     return;
   }
 
