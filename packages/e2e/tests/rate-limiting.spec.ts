@@ -107,27 +107,37 @@ test.describe('Rate limiting on message endpoints', () => {
     await register(page, uniqueUser('rlChat'));
     await createSpace(page, `RLChatSpace_${Date.now()}`);
 
-    // Send a warmup message via the UI compose input and wait for it to appear.
-    // This is the only reliable way to confirm the page's WebSocket has joined
-    // the room — the empty-state is a false positive (it appears as soon as
-    // messages = [], which happens synchronously before the async WS join).
+    // Send a warmup message via the UI compose input to confirm the page's WS
+    // has joined the room, and to consume 1 slot of the 20-message rate budget.
     const warmupText = `warmup-${Date.now()}`;
     await page.locator('input[placeholder^="Message #"]').fill(warmupText);
     await page.locator('input[placeholder^="Message #"]').press('Enter');
     await expect(page.locator('.msg-content', { hasText: warmupText })).toBeVisible({ timeout: 8_000 });
 
-    // Now blast 25 messages via raw WebSocket. The warmup already consumed 1
-    // of the 20-message rate-limit budget, so only 19 of these 25 will succeed.
-    // The page's WS is subscribed and will receive all successful broadcasts.
+    // Blast 25 messages via raw WebSocket. The warmup consumed 1 rate-limit slot,
+    // so only 19 of the 25 raw-WS messages are stored to the DB (not 25).
+    // sendManyMessages resolves only after receiving all responses; each 'message'
+    // response from the server is a broadcast that happens AFTER the DB insert —
+    // so all 19 successful messages are committed to the DB before this returns.
     await sendManyMessages(page, WS_RATE_MAX + 5);
 
-    // The chat should contain at most WS_RATE_MAX - 1 = 19 rate-test messages
-    // (not all 25), proving the rate limit is enforced.
-    const rateMsgs = page.locator('.msg-content', { hasText: /^rate-test-/ });
-    await expect(rateMsgs.first()).toBeVisible({ timeout: 5_000 });
-    const count = await rateMsgs.count();
-    expect(count).toBeLessThanOrEqual(WS_RATE_MAX);
-    expect(count).toBeGreaterThan(0); // At least some messages got through
+    // Verify via REST that the DB holds at most WS_RATE_MAX rate-test messages.
+    // Only stored messages can appear in chat (served from DB as history), so
+    // this is the ground truth for what will be visible in the chat view.
+    const rateMsgCount = await page.evaluate(async () => {
+      const auth = JSON.parse(localStorage.getItem('hum_auth')!) as { token: string };
+      const spaces = await fetch('/api/spaces', {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      }).then(r => r.json()) as Array<{ id: number }>;
+      const messages = await fetch(
+        `/api/spaces/${spaces[0].id}/messages?channel=general`,
+        { headers: { Authorization: `Bearer ${auth.token}` } }
+      ).then(r => r.json()) as Array<{ content: string }>;
+      return messages.filter(m => m.content.startsWith('rate-test-')).length;
+    });
+
+    expect(rateMsgCount).toBeLessThanOrEqual(WS_RATE_MAX);
+    expect(rateMsgCount).toBeGreaterThan(0); // At least some messages got through
   });
 
   test('rate limit error response contains the correct message', async ({ page }) => {
